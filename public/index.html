@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b0d12"><title>CINEMA AUTO — Studio</title>
+<style>
+:root{--bg:#0b0d12;--panel:#151a24;--line:#293140;--muted:#929bad;--red:#ed3448;--white:#f5f7fb}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--white);font:15px Inter,system-ui,Arial,sans-serif}
+.shell{display:grid;grid-template-columns:245px 1fr;min-height:100vh}.side{padding:28px 18px;background:#10131a;border-right:1px solid var(--line)}
+.brand{font-weight:900;font-size:20px;letter-spacing:1px}.brand b{color:var(--red)}.tag{font-size:11px;color:var(--muted);margin:8px 0 38px}
+nav{display:grid;gap:8px}nav a{padding:12px 14px;border-radius:10px;color:#c6ccda;text-decoration:none}nav a:hover{background:#271820;color:white}
+main{padding:34px;max-width:1400px;width:100%;margin:auto}.top{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:28px}
+.eyebrow{color:var(--red);font-size:11px;font-weight:800;letter-spacing:2px}h1{font-size:29px;margin:7px 0}.muted,small{color:var(--muted)}
+.status{border:1px solid var(--line);background:var(--panel);padding:9px 13px;border-radius:99px;font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card{background:linear-gradient(145deg,var(--panel),#11151d);border:1px solid var(--line);border-radius:16px;padding:20px}
+.metric{font-size:30px;font-weight:800;margin:15px 0 3px}.section{margin-top:22px}.section h2{font-size:17px;margin:0 0 14px}
+.wide{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}.btn{display:inline-block;border:0;background:var(--red);color:white;font-weight:750;padding:12px 16px;border-radius:10px;cursor:pointer;text-decoration:none}
+.btn.secondary{background:#242b38;border:1px solid var(--line)}.field{width:100%;background:#0d1118;color:white;border:1px solid var(--line);padding:12px;border-radius:9px;font:inherit}
+form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1.6}.check{display:flex;gap:9px;align-items:flex-start;font-size:12px;color:#cbd2df}
+.notice{padding:13px;border-radius:10px;background:#241c14;color:#f2c27c;font-size:12px;line-height:1.5}.hidden{display:none!important}
+@media(max-width:850px){.shell{grid-template-columns:1fr}.side{padding:17px;border-right:0;border-bottom:1px solid var(--line)}.tag{margin:5px 0 12px}nav{display:flex;overflow:auto}nav a{white-space:nowrap}main{padding:22px 16px}.grid,.wide{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}}
+</style></head><body>
+<div class="shell"><aside class="side"><div class="brand">CINEMA <b>AUTO</b></div><div class="tag">YOUTUBE PUBLISHING STUDIO</div>
+<nav><a href="#dashboard">Tableau de bord</a><a href="#upload">Importer une vidéo</a><a href="#connection">Connexion YouTube</a></nav>
+<p class="hint">Version 1.0 · Studio de publication</p></aside>
+<main id="dashboard"><header class="top"><div><div class="eyebrow">ESPACE DE GESTION</div><h1>Tableau de bord</h1><div class="muted">Gérez vos vidéos et vos publications YouTube.</div></div><div class="status" id="serverStatus">Vérification du serveur…</div></header>
+<section class="card section" id="loginCard"><h2>Accès administrateur</h2><form id="loginForm"><input class="field" type="password" name="password" placeholder="Mot de passe administrateur" required><button class="btn">Se connecter</button><div class="hint" id="loginMessage">Le mot de passe sera défini dans Render.</div></form></section>
+<div id="appContent" class="hidden">
+<div class="grid"><div class="card"><small>Vidéos publiées depuis ce studio</small><div class="metric">—</div><small>Statistiques à connecter</small></div><div class="card"><small>Chaîne YouTube</small><div class="metric" id="ytStatus">Non liée</div><small>Connexion Google OAuth</small></div><div class="card"><small>État du service</small><div class="metric" id="health">—</div><small>Disponibilité du serveur</small></div></div>
+<div class="wide section"><section class="card" id="upload"><h2>Importer une vidéo</h2><form id="uploadForm"><input class="field" name="title" maxlength="100" placeholder="Titre de la vidéo" required><textarea class="field" name="description" rows="3" placeholder="Description YouTube (facultatif)"></textarea><input class="field" type="file" name="video" accept="video/*" required><label class="check"><input type="checkbox" name="rightsConfirmed" required><span>Je confirme détenir les droits nécessaires pour publier cette vidéo.</span></label><button class="btn" id="send">Envoyer sur YouTube en privé</button><div class="hint" id="message">Les vidéos sont envoyées en mode privé par défaut.</div></form></section>
+<section class="card" id="connection"><h2>Connexion YouTube</h2><p class="muted">Autorisez votre chaîne via Google OAuth officiel.</p><a class="btn" href="/auth/youtube">Connecter YouTube</a><p class="hint" id="oauthHint">Les identifiants Google doivent être configurés dans Render.</p><div class="notice">Importez uniquement des œuvres dont vous détenez les droits de redistribution. Ce studio ne récupère pas de films protégés depuis des plateformes tierces.</div><p><button class="btn secondary" id="logout">Se déconnecter</button></p></section></div></div>
+<p class="hint">Avant une exploitation durable : prévoir une base de données pour les sessions et jetons OAuth, ainsi qu'un stockage persistant pour les fichiers vidéo.</p></main></div>
+<script>
+const el=id=>document.getElementById(id);
+async function refresh(){try{const s=await fetch('/api/status').then(r=>r.json());el('serverStatus').textContent='Serveur opérationnel';el('loginCard').classList.toggle('hidden',s.adminAuthenticated);el('appContent').classList.toggle('hidden',!s.adminAuthenticated);if(s.adminAuthenticated){el('ytStatus').textContent=s.youtubeConnected?'Connectée':'Non liée';el('oauthHint').textContent=s.youtubeConfigured?'Google OAuth configuré.':'Ajoutez les variables Google OAuth dans Render.'}}catch(e){el('serverStatus').textContent='Serveur non connecté'}}
+el('loginForm').addEventListener('submit',async e=>{e.preventDefault();const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:new FormData(e.target).get('password')})});const d=await r.json();el('loginMessage').textContent=r.ok?'Connexion réussie.':d.error;refresh()});
+el('uploadForm').addEventListener('submit',async e=>{e.preventDefault();const b=el('send'),m=el('message');b.disabled=true;m.textContent='Envoi en cours…';const fd=new FormData(e.target);fd.set('rightsConfirmed',e.target.rightsConfirmed.checked?'true':'false');try{const r=await fetch('/api/youtube/upload',{method:'POST',body:fd});const d=await r.json();if(!r.ok)throw Error(d.error);m.innerHTML='Vidéo envoyée en privé : <a target="_blank" rel="noopener" href="'+d.url+'">ouvrir sur YouTube</a>'}catch(err){m.textContent=err.message}finally{b.disabled=false}});
+el('logout').addEventListener('click',async()=>{await fetch('/api/logout',{method:'POST'});refresh()});refresh();
+</script></body></html>
