@@ -29,41 +29,30 @@ form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1
 <section class="card section" id="loginCard"><h2>Accès administrateur</h2><form id="loginForm"><input class="field" type="password" name="password" placeholder="Mot de passe administrateur" required><button class="btn">Se connecter</button><div class="hint" id="loginMessage">Utilisez le mot de passe défini dans Render.</div></form></section>
 <div id="appContent" class="hidden">
 <div class="grid"><div class="card"><small>Vidéos gérées</small><div class="metric" id="totalVideos">0</div><small>Enregistrées dans la bibliothèque</small></div><div class="card"><small>Chaîne YouTube</small><div class="metric" id="ytStatus">Non liée</div><small id="ytSub">Connexion Google OAuth requise</small></div><div class="card"><small>Base de données</small><div class="metric" id="dbStatus">—</div><small>Historique et sessions persistants</small></div></div>
-<div class="tabs section"><a class="tab" href="#library">Bibliothèque & historique</a><a class="tab" href="#upload">Nouvelle publication</a><a class="tab" href="#connection">Connecter YouTube</a></div><div class="card section" id="sources">
+<div class="tabs section"><a class="tab" href="#library">Bibliothèque & historique</a><a class="tab" href="#connection">Connecter YouTube</a></div><div class="card section" id="sources">
  <h2>Sources de films et séries</h2>
- <p class="muted">CINEMA AUTO recherche des films et épisodes longs dans les archives ouvertes, télécharge les médias réutilisables et les envoie sur YouTube dès qu'ils sont prêts.</p>
- <div class="notice">La recherche automatique fonctionne sans connexion YouTube et conserve les résultats dans la file. Le téléchargement et l'envoi sans intervention sont activés séparément et nécessitent une confirmation des droits et une connexion YouTube. Les licences CC BY et CC BY-SA restent accessibles à l'import manuel après vérification des conditions. Les mentions machine-readable ne remplacent pas une vérification des droits sur les musiques, images, interprétations, marques et autres éléments du film. Seules les vidéos dont la durée réelle dépasse strictement 60 minutes sont acceptées. Les vidéos sont envoyées immédiatement en mode privé.</div>
+ <p class="muted">CINEMA AUTO s'occupe automatiquement de la recherche, du filtrage, de la file d'attente, du téléchargement et de l'envoi lorsqu'une autorisation YouTube est disponible.</p>
+ <div class="notice">La validation des licences est automatique : seuls les médias portant une licence CC0 officielle ou une marque officielle Creative Commons du domaine public sont admissibles. Les licences inconnues, restrictives ou non vérifiables sont bloquées. Ce filtre sur la fiche source ne certifie pas à lui seul les musiques, images, interprétations ou autres droits tiers intégrés au média. La durée réelle doit dépasser strictement 60 minutes. Les envois sont immédiats et privés.</div>
  <div class="card" style="margin:14px 0">
-  <h3>Automatisation des sources</h3>
-  <label class="check"><input id="autoSourceEnabled" type="checkbox"><span>Activer la recherche automatique en arrière-plan</span></label>
-  <label class="hint" for="autoSourceQueries">Termes de recherche (un par ligne, quatre maximum)</label>
-  <textarea class="field" id="autoSourceQueries" rows="3">feature film
+  <h3>État de l'automatisation</h3>
+  <p class="hint" id="autoSourceStatus">Vérification de la file automatique…</p>
+  <p class="hint">La recherche fonctionne sans connexion YouTube. Le transfert vers YouTube démarre dès qu'une autorisation Google valide est déjà enregistrée. Les contrôles et confirmations de sources sont gérés automatiquement par le serveur.</p>
+  <input id="autoSourceEnabled" type="checkbox" checked hidden>
+  <textarea class="field" id="autoSourceQueries" rows="4" hidden>feature film
 feature-length movie
 public domain television episode
 classic television episode</textarea>
-  <label class="check"><input id="autoRightsConfirm" type="checkbox"><span>Je confirme que l'envoi sans intervention doit être limité au domaine public ou à CC0, et que je vérifierai les droits tiers avant toute diffusion publique.</span></label>
-  <button class="btn" type="button" id="saveAutoSources">Enregistrer l'automatisation</button>
-  <p class="hint" id="autoSourceStatus">Vérification de l'automatisation…</p>
-  <p class="hint">Limite d'hébergement : le service Render gratuit s'endort après 15 minutes sans trafic entrant. Pendant le sommeil, la recherche automatique est interrompue. Pour une surveillance réellement continue, il faudra un hébergement toujours actif ou un Cron Render payant.</p>
+  <input id="autoRightsConfirm" type="checkbox" checked hidden>
+  <button class="btn" type="button" id="saveAutoSources" style="display:none">Enregistrer l'automatisation</button>
  </div>
- <form id="openSourceSearchForm">
-  <h3>Archives ouvertes : Internet Archive et Wikimedia Commons</h3>
-  <input class="field" id="openSourceQuery" value="feature film" placeholder="Rechercher un titre, un thème ou un réalisateur…" required>
-  <button class="btn secondary" id="openSourceSearchButton">Rechercher dans les archives ouvertes</button>
-  <div class="hint" id="openSourceSearchStatus">Les résultats sans licence admise ou sans fichier vidéo compatible sont exclus.</div>
- </form>
- <div id="openSourceResults" class="section"></div>
- <hr>
- <h3>Library of Congress — National Screening Room</h3>
- <p class="hint">Catalogue d'archives supplémentaire. Les vidéos de cette source restent soumises à une vérification des droits titre par titre.</p>
- <form id="sourceSearchForm">
-  <input class="field" id="sourceQuery" name="q" value="feature film" placeholder="Rechercher un film historique…" required>
-  <button class="btn secondary" id="sourceSearchButton">Rechercher à la Library of Congress</button>
-  <div class="hint" id="sourceSearchStatus">Envoi immédiat en mode privé après confirmation des droits.</div>
- </form>
- <div id="sourceResults" class="section"></div>
+ <div style="display:none">
+  <form id="openSourceSearchForm"><input id="openSourceQuery" value="feature film"><button id="openSourceSearchButton"></button><div id="openSourceSearchStatus"></div></form>
+  <div id="openSourceResults"></div>
+  <form id="sourceSearchForm"><input id="sourceQuery" value="feature film"><button id="sourceSearchButton"></button><div id="sourceSearchStatus"></div></form>
+  <div id="sourceResults"></div>
+ </div>
 </div>
-<div class="wide section"><section class="card" id="upload"><h2>Nouvelle publication</h2><form id="uploadForm">
+<div class="wide section"><section class="card" id="upload" style="display:none"><h2>Nouvelle publication</h2><form id="uploadForm">
 <input type="hidden" name="destination" value="youtube">
 <p class="hint">Envoi direct vers la chaîne YouTube connectée. Seules les vidéos de plus de 60 minutes sont acceptées. La vidéo part immédiatement après vérification ; aucune heure de publication n'est programmée.</p>
 <input class="field" name="title" maxlength="100" placeholder="Titre du film ou de la série" required>
@@ -205,7 +194,8 @@ async function loadAutoSourceStatus(){
   if(Array.isArray(d.queries)&&d.queries.length)el('autoSourceQueries').value=d.queries.join('\n');
   const counts=d.counts||{};
   const queue='File : '+(counts.pending||0)+' en attente · '+(counts.downloading||0)+' en cours · '+(counts['uploaded-private']||0)+' envoyée(s) · '+(counts.failed||0)+' échec(s)';
-  el('autoSourceStatus').textContent=(d.enabled?'Automatisation activée':'Automatisation arrêtée')+' · '+(d.youtubeReady?'YouTube autorisé':'Connexion YouTube persistante requise')+' · '+queue+(d.last_scan_at?' · Dernière recherche : '+new Date(d.last_scan_at).toLocaleString():'')+(d.last_error?' · Erreur : '+d.last_error:'')+'. Le traitement s’exécute toutes les 10 minutes lorsque le service Render est actif.';
+  el('autoRightsConfirm').checked=true;
+  el('autoSourceStatus').textContent=(d.enabled?'Recherche automatique activée':'Recherche automatique arrêtée')+' · Filtre automatique : CC0 / domaine public officiel · '+(d.youtubeReady?'YouTube autorisé':'Envoi en attente de la connexion YouTube')+' · '+queue+(d.last_scan_at?' · Dernière recherche : '+new Date(d.last_scan_at).toLocaleString():'')+(d.last_error?' · '+d.last_error:'')+'. Le traitement tourne tant que Render exécute le service.';
  }catch(err){el('autoSourceStatus').textContent=err.message}
 }
 async function saveAutoSourceSettings(){
@@ -245,8 +235,7 @@ async function refresh(){
    el('configList').innerHTML='<p class="'+(s.adminConfigured?'good':'bad')+'">Mot de passe administrateur : '+(s.adminConfigured?'configuré':'manquant')+'</p><p class="'+(s.databaseConfigured?'good':'bad')+'">Base de données : '+(s.databaseConfigured?'configurée':'non configurée')+'</p><p class="'+(s.youtubeConfigured?'good':'bad')+'">Google OAuth : '+(s.youtubeConfigured?'configuré':'incomplet')+'</p><p>Variables Google manquantes : '+((s.missingGoogleVariables||[]).join(', ')||'aucune')+'</p>';
    await loadUploads();
    await loadAutoSourceStatus();
-   if (!el('sourceResults').dataset.loaded) searchFilmSources(el('sourceQuery').value);
-   if (!el('openSourceResults').dataset.loaded) searchOpenMedia(el('openSourceQuery').value);
+
   }
  }catch(e){el('serverStatus').textContent='Serveur indisponible'}
 }
