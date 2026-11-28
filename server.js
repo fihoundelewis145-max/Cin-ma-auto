@@ -176,15 +176,17 @@ app.get("/api/health", async (_req, res) => {
   res.json({ ok: true, app: "CINEMA AUTO", database: db });
 });
 
-app.get("/api/status", (req, res) => {
+app.get("/api/status", async (req, res) => {
   const cfg = configState();
+  let savedTokens = null;
+  try { savedTokens = await loadPersistentYoutubeTokens(); } catch (_) {}
   res.json({
     app: "CINEMA AUTO",
     adminAuthenticated: req.session?.admin === true,
     adminConfigured: cfg.adminConfigured,
     databaseConfigured: cfg.databaseConfigured,
     youtubeConfigured: cfg.youtubeConfigured,
-    youtubeConnected: Boolean(req.session?.youtubeTokens),
+    youtubeConnected: Boolean(savedTokens?.refresh_token || req.session?.youtubeConnected),
     missingGoogleVariables: cfg.googleMissing,
     missingVariables: cfg.missing,
     publicationDefault: "private"
@@ -231,9 +233,9 @@ app.get("/auth/youtube/callback", requireAdmin, async (req, res) => {
     delete req.session.oauthState;
     const { tokens } = await client.getToken(req.query.code);
     if (!tokens.access_token) return res.status(502).send("Google n'a pas fourni de jeton d'accès.");
-    req.session.youtubeTokens = { ...req.session.youtubeTokens, ...tokens };
-    try { await savePersistentYoutubeTokens(tokens); }
-    catch (persistError) { console.error("Persistent YouTube token save failed:", persistError.message); }
+    await savePersistentYoutubeTokens(tokens);
+    req.session.youtubeConnected = true;
+    delete req.session.youtubeTokens;
     req.session.save(err => {
       if (err) return res.status(500).send("La session Google n'a pas pu être enregistrée.");
       res.redirect("/?youtube=connected");
@@ -260,7 +262,7 @@ app.get("/api/uploads", requireAdmin, async (req, res) => {
 app.post("/api/youtube/upload", requireAdmin, upload.single("video"), async (req, res) => {
   const tempFile = req.file?.path;
   try {
-    const tokens = req.session.youtubeTokens;
+    const tokens = await loadPersistentYoutubeTokens();
     if (!tokens) return res.status(401).json({ error: "La chaîne YouTube n'est pas connectée. Cliquez sur Connecter YouTube." });
     if (req.body.rightsConfirmed !== "true")
       return res.status(400).json({ error: "Confirmez que vous possédez les droits nécessaires pour publier cette vidéo." });
@@ -280,7 +282,7 @@ app.post("/api/youtube/upload", requireAdmin, upload.single("video"), async (req
     if (!client) return res.status(503).json({ error: "Google OAuth n'est pas configuré dans Render." });
     client.setCredentials(tokens);
     client.on("tokens", updated => {
-      req.session.youtubeTokens = { ...req.session.youtubeTokens, ...updated };
+      savePersistentYoutubeTokens(updated).catch(err => console.error("YouTube token refresh save failed:", err.message));
     });
 
     const category = ["film", "series"].includes(req.body.category) ? req.body.category : "film";
@@ -393,6 +395,7 @@ app.post("/api/sources/loc/import", requireAdmin, async (req, res) => {
     const client = createOAuthClient();
     if (!client) throw new Error("Google OAuth n'est pas configuré dans Render.");
     client.setCredentials(tokens);
+    client.on("tokens", updated => savePersistentYoutubeTokens(updated).catch(err => console.error("YouTube token refresh save failed:", err.message)));
     let publishAt = null;
     if (req.body.publishAt) {
       const scheduled = new Date(req.body.publishAt);
@@ -468,7 +471,7 @@ app.post("/api/sources/open/import", requireAdmin, async (req, res) => {
     const provider = String(req.body.provider || "");
     const providerKey = String(req.body.providerKey || "");
     const fileName = req.body.fileName ? String(req.body.fileName) : null;
-    const tokens = req.session.youtubeTokens || await loadPersistentYoutubeTokens();
+    const tokens = await loadPersistentYoutubeTokens();
     if (!tokens) return res.status(401).json({ error: "Connectez d'abord la chaîne YouTube à CINEMA AUTO." });
     tempFile = path.join(uploadDir, "open-" + crypto.randomBytes(16).toString("hex") + ".video");
     const source = await downloadOpenVideo(provider, providerKey, fileName, tempFile);
