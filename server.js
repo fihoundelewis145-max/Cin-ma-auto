@@ -164,6 +164,9 @@ async function ensureSchema() {
   )`);
   await pool.query("INSERT INTO source_auto_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING");
   await pool.query("UPDATE source_auto_config SET queries=ARRAY['feature film','feature-length movie','public domain television episode','classic television episode'] WHERE id=1 AND queries=ARRAY['silent film','public domain short film']");
+  if (String(process.env.AUTO_SEARCH_ENABLED || "").toLowerCase() === "true") {
+    await pool.query("UPDATE source_auto_config SET enabled=TRUE, updated_at=NOW() WHERE id=1");
+  }
   await pool.query(`CREATE TABLE IF NOT EXISTS source_jobs (
     id BIGSERIAL PRIMARY KEY,
     source_key TEXT UNIQUE NOT NULL,
@@ -534,10 +537,9 @@ app.post("/api/sources/auto/config", requireAdmin, async (req, res) => {
     const queries = Array.isArray(req.body?.queries)
       ? [...new Set(req.body.queries.map(value => String(value || "").trim().slice(0, 80)).filter(value => value.length >= 2))].slice(0, 4)
       : [];
-    if (enabled && !rightsConfirmed) return res.status(400).json({ error: "Confirmez la politique de sources et de licences avant d'activer l'envoi automatique." });
+    // Searching public catalog metadata is independent of YouTube and redistribution rights.
+    // rights_policy_confirmed gates only automatic downloading and uploading.
     if (enabled && !queries.length) return res.status(400).json({ error: "Ajoutez au moins un terme de recherche." });
-    const tokens = await loadPersistentYoutubeTokens();
-    if (enabled && !tokens) return res.status(409).json({ error: "Connectez d'abord YouTube en cliquant sur « Connecter YouTube », puis activez l'automatisation." });
     const updated = await pool.query(
       "UPDATE source_auto_config SET enabled=$1, rights_policy_confirmed=$2, queries=$3, last_error=NULL, updated_at=NOW() WHERE id=1 RETURNING enabled, rights_policy_confirmed, queries, last_scan_at",
       [enabled, rightsConfirmed, queries]
@@ -555,13 +557,7 @@ async function runAutoSourcePipeline() {
     await ensureSchema();
     const configResult = await pool.query("SELECT * FROM source_auto_config WHERE id=1");
     const config = configResult.rows[0];
-    if (!config?.enabled || !config.rights_policy_confirmed) return;
-    const tokens = await loadPersistentYoutubeTokens();
-    if (!tokens) throw new Error("Connexion YouTube persistante manquante.");
-    const oauth = createOAuthClient();
-    if (!oauth) throw new Error("Google OAuth n'est pas configuré.");
-    oauth.setCredentials(tokens);
-    oauth.on("tokens", updated => savePersistentYoutubeTokens(updated).catch(err => console.error("Auto token refresh:", err.message)));
+    if (!config?.enabled) return;
 
     await pool.query("UPDATE source_jobs SET status='pending', updated_at=NOW() WHERE status='downloading' AND updated_at < NOW() - INTERVAL '30 minutes'");
     const discovered = [];
@@ -580,6 +576,28 @@ async function runAutoSourcePipeline() {
       );
     }
     await pool.query("UPDATE source_auto_config SET last_scan_at=NOW(), last_error=NULL WHERE id=1");
+
+    // Search results remain queued until the user has explicitly confirmed the rights policy
+    // and a persistent YouTube OAuth connection is available.
+    if (!config.rights_policy_confirmed) {
+      await pool.query("UPDATE source_auto_config SET last_error=$1 WHERE id=1",
+        ["Recherche active. Envoi automatique en attente de la confirmation de la politique des droits."]);
+      return;
+    }
+    const tokens = await loadPersistentYoutubeTokens();
+    if (!tokens) {
+      await pool.query("UPDATE source_auto_config SET last_error=$1 WHERE id=1",
+        ["Recherche active. Envoi automatique en attente de la connexion YouTube."]);
+      return;
+    }
+    const oauth = createOAuthClient();
+    if (!oauth) {
+      await pool.query("UPDATE source_auto_config SET last_error=$1 WHERE id=1",
+        ["Recherche active. Envoi automatique en attente des identifiants Google OAuth."]);
+      return;
+    }
+    oauth.setCredentials(tokens);
+    oauth.on("tokens", updated => savePersistentYoutubeTokens(updated).catch(err => console.error("Auto token refresh:", err.message)));
 
     // Upload sequentially: each next film starts only after the previous upload finishes.
     for (let index = 0; index < 10; index++) {
