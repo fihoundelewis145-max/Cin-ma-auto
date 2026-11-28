@@ -1,49 +1,42 @@
-# CINEMA AUTO
+# CINEMA AUTO 1.2
 
-CINEMA AUTO est un studio de gestion de vidéos et de publication vers une chaîne YouTube. Il est prévu pour des fichiers et sources que l'administrateur est autorisé à redistribuer. Il ne télécharge pas et ne republie pas de films ou séries protégés depuis MovieBox ou d'autres services sans autorisation.
+Studio de gestion, importation et programmation de vidéos vers YouTube. Il est conçu pour des contenus originaux, libres de droits ou pour lesquels l'administrateur possède une licence écrite de redistribution. Il ne contourne pas les protections de MovieBox ou d'autres plateformes.
 
-## Pourquoi YouTube peut ne pas fonctionner
+## Infrastructure
+- Node.js 20 / Express
+- Render Web Service
+- Render PostgreSQL pour rendre les sessions et l'historique persistants
+- YouTube Data API v3 avec OAuth 2.0
+- Programmation native YouTube via `status.publishAt` (la vidéo est téléversée privée, YouTube la rend publique à l'heure future).
 
-La connexion Google n'est pas activée tant que les trois variables suivantes ne sont pas correctement définies dans Render :
+## Déploiement Render
+Le fichier `render.yaml` décrit un service Web et une base PostgreSQL. Après synchronisation du Blueprint, vérifier que le service et la base `cinema-auto-db` existent et que `DATABASE_URL` est reliée à la base.
+
+Dans le service Render > Environment, définir :
+- `ADMIN_PASSWORD` : mot de passe administrateur robuste.
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_REDIRECT_URI`
+- `GOOGLE_REDIRECT_URI` = `https://cinema-auto.onrender.com/auth/youtube/callback`
 
-### Configuration Google
-1. Ouvrir Google Cloud Console et sélectionner/créer un projet.
+`SESSION_SECRET` est généré par Render. `DATABASE_URL` est reliée depuis la ressource PostgreSQL du Blueprint.
+
+## Configuration Google OAuth (indispensable)
+1. Ouvrir Google Cloud Console et sélectionner un projet.
 2. Activer **YouTube Data API v3**.
-3. Configurer l'écran de consentement OAuth (si l'application est en mode test, ajouter le compte Google propriétaire de la chaîne comme utilisateur test).
-4. Créer un identifiant OAuth de type **Web application**.
-5. Dans les URI de redirection autorisés, ajouter exactement :
+3. Configurer l'écran de consentement OAuth et, si le projet est en mode Test, ajouter l'adresse Google qui gère la chaîne dans les utilisateurs test.
+4. Créer un identifiant OAuth **Web application**.
+5. Ajouter exactement l'URI de redirection :
    `https://cinema-auto.onrender.com/auth/youtube/callback`
-6. Dans Render > service `cinema-auto` > Environment, définir :
-   - `GOOGLE_CLIENT_ID` : identifiant OAuth du client Web.
-   - `GOOGLE_CLIENT_SECRET` : secret OAuth de ce même client.
-   - `GOOGLE_REDIRECT_URI` : `https://cinema-auto.onrender.com/auth/youtube/callback`
-7. Enregistrer puis attendre le redéploiement.
-8. Ouvrir CINEMA AUTO, se connecter à l'espace administrateur, puis cliquer sur **Connecter YouTube** et autoriser le compte voulu.
+6. Renseigner client ID, client secret et URI de redirection dans Render.
+7. Redéployer, ouvrir le site, se connecter comme administrateur, puis appuyer sur Connecter YouTube et accepter l'accès.
 
-Les identifiants OAuth sont propres au compte Google et ne peuvent pas être fabriqués par le dépôt GitHub. Ne jamais placer le secret Google dans un fichier du dépôt.
+Le secret Google ne doit jamais être commité dans GitHub ni envoyé dans une conversation.
 
-## Variables Render
-- `ADMIN_PASSWORD` : mot de passe administrateur.
-- `SESSION_SECRET` : secret aléatoire long.
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` : variables OAuth listées ci-dessus.
+## Lancer localement
+Node.js 20+, `npm install`, variables dans `.env`, puis `npm start`.
 
-## Démarrage local
-Node.js 20+, `npm install`, puis `npm start`.
-
-## Limites connues à corriger avant une exploitation permanente
-- Les sessions et jetons OAuth sont stockés dans le magasin mémoire Express par défaut : ils sont perdus lorsque le service redémarre ou se met en veille. Un magasin de sessions persistant et un stockage chiffré des jetons sont nécessaires pour une utilisation longue durée.
-- Les fichiers envoyés sont temporaires sur le disque du service Render gratuit. Utiliser un stockage objet ou disque persistant pour des fichiers volumineux.
-- Cette version envoie les vidéos en mode **privé** par défaut afin de permettre une vérification avant toute publication publique.
-- La file de planification et l'ingestion automatique de sources autorisées ne sont pas encore disponibles dans cette version.
-
-## Routes
-- `GET /api/health`
-- `GET /api/status`
-- `POST /api/login`
-- `POST /api/logout`
-- `GET /auth/youtube`
-- `GET /auth/youtube/callback`
-- `POST /api/youtube/upload`
+## Limitations à connaître
+- L'envoi vidéo utilise un fichier temporaire local Render : il ne constitue pas un stockage durable. Les grands fichiers nécessitent un disque persistant ou un stockage objet (S3/R2).
+- Les sessions et jetons OAuth sont désormais stockés dans PostgreSQL si `DATABASE_URL` est reliée.
+- La file d'importation automatique depuis des sites tiers n'est pas incluse ; seules les sources autorisées peuvent être automatisées.
+- Les vidéos sont programmées via l'API YouTube avec visibilité privée jusqu'à l'heure prévue.
