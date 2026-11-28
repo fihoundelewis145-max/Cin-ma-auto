@@ -23,9 +23,9 @@ form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1
 @media(max-width:850px){.shell{grid-template-columns:1fr}.side{padding:17px;border-right:0;border-bottom:1px solid var(--line)}.tag{margin:5px 0 12px}nav{display:flex;overflow:auto}nav a{white-space:nowrap}main{padding:22px 16px}.grid,.wide{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}}
 </style></head><body>
 <div class="shell"><aside class="side"><div class="brand">CINEMA <b>AUTO</b></div><div class="tag">VIDEO PUBLISHING STUDIO</div>
-<nav><a href="#dashboard">Vue d'ensemble</a><a href="#sources">Sources de films</a><a href="#library">Bibliothèque</a><a href="#upload">Importer / programmer</a><a href="#connection">YouTube</a><a href="#settings">Configuration</a></nav>
+<nav><a href="#dashboard">Vue d'ensemble</a><a href="#sources">Sources de films</a><a href="#library">Bibliothèque</a><a href="#upload">Importer / envoyer</a><a href="#connection">YouTube</a><a href="#settings">Configuration</a></nav>
 <p class="hint">Studio de publication · Version 1.3</p></aside>
-<main id="dashboard"><header class="top"><div><div class="eyebrow">CENTRE DE CONTRÔLE</div><h1>Tableau de bord</h1><div class="muted">Gérez les films, les épisodes et le calendrier de publication.</div></div><div class="status" id="serverStatus">Vérification…</div></header>
+<main id="dashboard"><header class="top"><div><div class="eyebrow">CENTRE DE CONTRÔLE</div><h1>Tableau de bord</h1><div class="muted">Gérez les films, les épisodes et les envois vers YouTube.</div></div><div class="status" id="serverStatus">Vérification…</div></header>
 <section class="card section" id="loginCard"><h2>Accès administrateur</h2><form id="loginForm"><input class="field" type="password" name="password" placeholder="Mot de passe administrateur" required><button class="btn">Se connecter</button><div class="hint" id="loginMessage">Utilisez le mot de passe défini dans Render.</div></form></section>
 <div id="appContent" class="hidden">
 <div class="grid"><div class="card"><small>Vidéos gérées</small><div class="metric" id="totalVideos">0</div><small>Enregistrées dans la bibliothèque</small></div><div class="card"><small>Chaîne YouTube</small><div class="metric" id="ytStatus">Non liée</div><small id="ytSub">Connexion Google OAuth requise</small></div><div class="card"><small>Base de données</small><div class="metric" id="dbStatus">—</div><small>Historique et sessions persistants</small></div></div>
@@ -78,7 +78,7 @@ classic television episode</textarea>
 <section class="card" id="connection">
 <h2>Connexions des chaînes</h2>
 <div class="integration">
-  <div class="integration-head"><span class="integration-icon youtube">▶</span><div><strong>YouTube — connexion à CINEMA AUTO</strong><small>Autorisation de téléverser et programmer les vidéos</small></div></div>
+  <div class="integration-head"><span class="integration-icon youtube">▶</span><div><strong>YouTube — connexion à CINEMA AUTO</strong><small>Autorisation d'envoyer les vidéos immédiatement</small></div></div>
   <p class="muted">Reliez la chaîne que CINEMA AUTO utilisera pour ses publications. Cette autorisation passe par Google OAuth officiel.</p>
   <a class="btn" id="connectButton" href="/auth/youtube">Connecter ma chaîne à CINEMA AUTO</a>
   <p class="hint" id="oauthHint">Vérification de la configuration Google…</p>
@@ -124,7 +124,7 @@ classic television episode</textarea>
 <p class="hint">Les vidéos de la file automatique sont téléversées immédiatement en privé après téléchargement. Les contenus publics nécessitent une vérification des droits. Les gros fichiers nécessitent un stockage adapté ; le service gratuit Render peut s'arrêter lorsqu'il est inactif.</p></main></div>
 <script>
 const el=id=>document.getElementById(id);
-function localToIso(value){if(!value)return "";const d=new Date(value);if(!Number.isFinite(d.getTime()))throw Error("Date de programmation invalide.");if(d.getTime()<Date.now()+120000)throw Error("Choisissez une heure située au moins deux minutes dans le futur.");return d.toISOString()}
+function localToIso(value){if(!value)return "";const d=new Date(value);if(!Number.isFinite(d.getTime()))throw Error("Date invalide.");return d.toISOString()}
 async function verifyMetricoolChannel(silent=false){
  const button=el('verifyMetricoolChannel'),result=el('metricoolChannelResult');
  if(button)button.disabled=true;
@@ -178,7 +178,7 @@ async function searchOpenMedia(q){
   if(!r.ok)throw Error(d.error||'Recherche impossible.');
   status.textContent=(d.notice||'Résultats chargés')+' · Internet Archive : '+d.providers.internetArchive+' · Wikimedia Commons : '+d.providers.wikimediaCommons;
   box.dataset.loaded='true';
-  box.innerHTML=(d.sources||[]).map((v,i)=>'<article class="card" style="margin-top:10px"><strong>'+escapeHtml(v.title)+'</strong><p class="hint">'+escapeHtml(v.provider)+' · '+escapeHtml(v.year||v.format)+' · '+(v.sizeBytes?Math.round(v.sizeBytes/1048576)+' Mo':'taille inconnue')+'</p><p class="hint">'+escapeHtml(v.description||'')+'</p><p class="hint">Licence : <strong>'+escapeHtml(v.license)+'</strong> · '+escapeHtml(v.attribution||'Attribution non indiquée')+'</p><a class="help-link" href="'+escapeHtml(v.itemUrl)+'" target="_blank" rel="noopener noreferrer">Consulter la fiche source ↗</a><label class="check"><input type="checkbox" id="openRights'+i+'"><span>J’ai vérifié la fiche, la licence et les droits tiers ; je peux redistribuer cette vidéo.</span></label><button class="btn" type="button" data-provider="'+escapeHtml(v.provider)+'" data-provider-key="'+escapeHtml(v.providerKey)+'" data-file-name="'+escapeHtml(v.fileName||'')+'" data-index="'+i+'">Télécharger et envoyer immédiatement vers YouTube</button></article>').join('')||'<p class="hint">Aucun fichier vidéo admissible trouvé. Essaie un autre titre ou thème.</p>';
+  box.innerHTML=(d.sources||[]).map((v,i)=>'<article class="card" style="margin-top:10px"><strong>'+escapeHtml(v.title)+'</strong><p class="hint">'+escapeHtml(v.provider)+' · '+escapeHtml(v.year||v.format)+' · '+(v.sizeBytes?Math.round(v.sizeBytes/1048576)+' Mo':'taille inconnue')+' · Durée : '+(v.durationSeconds!=null?Math.floor(v.durationSeconds/60)+' min':'à vérifier au téléchargement')+'</p><p class="hint">'+escapeHtml(v.description||'')+'</p><p class="hint">Licence : <strong>'+escapeHtml(v.license)+'</strong> · '+escapeHtml(v.attribution||'Attribution non indiquée')+'</p><a class="help-link" href="'+escapeHtml(v.itemUrl)+'" target="_blank" rel="noopener noreferrer">Consulter la fiche source ↗</a><label class="check"><input type="checkbox" id="openRights'+i+'"><span>J’ai vérifié la fiche, la licence et les droits tiers ; je peux redistribuer cette vidéo.</span></label><button class="btn" type="button" data-provider="'+escapeHtml(v.provider)+'" data-provider-key="'+escapeHtml(v.providerKey)+'" data-file-name="'+escapeHtml(v.fileName||'')+'" data-index="'+i+'">Télécharger et envoyer immédiatement vers YouTube</button></article>').join('')||'<p class="hint">Aucun fichier vidéo admissible trouvé. Essaie un autre titre ou thème.</p>';
   box.querySelectorAll('[data-provider]').forEach(btn=>btn.addEventListener('click',()=>importOpenSource(btn)));
  }catch(err){status.textContent=err.message}
  finally{button.disabled=false}
