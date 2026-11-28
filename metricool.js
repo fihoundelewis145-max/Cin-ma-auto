@@ -3,10 +3,11 @@ const fs = require("fs");
 const path = require("path");
 
 const MEDIA_TTL_MS = 60 * 60 * 1000;
+const DEFAULT_METRICOOL_BLOG_ID = "8413347";
 const mediaTickets = new Map();
 
 function metricoolConfig() {
-  const keys = ["METRICOOL_API_TOKEN", "METRICOOL_USER_ID", "METRICOOL_BLOG_ID"];
+  const keys = ["METRICOOL_API_TOKEN", "METRICOOL_USER_ID"];
   const missing = keys.filter(key => !String(process.env[key] || "").trim());
   return {
     configured: missing.length === 0,
@@ -41,7 +42,7 @@ function localDateTime(date, timezone) {
 function apiUrl(endpoint, includeBlog = true) {
   const url = new URL("https://app.metricool.com/api" + endpoint);
   url.searchParams.set("userId", String(process.env.METRICOOL_USER_ID));
-  if (includeBlog) url.searchParams.set("blogId", String(process.env.METRICOOL_BLOG_ID));
+  if (includeBlog) url.searchParams.set("blogId", String(process.env.METRICOOL_BLOG_ID || DEFAULT_METRICOOL_BLOG_ID));
   return url;
 }
 
@@ -90,6 +91,7 @@ module.exports = function attachMetricoolRoutes(app, { requireAdmin, upload, poo
       missing: state.missing,
       timezone: state.timezone,
       provider: "Metricool",
+      blogId: process.env.METRICOOL_BLOG_ID || DEFAULT_METRICOOL_BLOG_ID,
       apiPlanRequired: "Advanced ou Custom",
       channelConnectionUrl: process.env.METRICOOL_CONNECTION_URL ||
         "https://app.metricool.com/brands/connections"
