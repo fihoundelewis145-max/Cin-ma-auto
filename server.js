@@ -289,14 +289,6 @@ app.post("/api/youtube/upload", requireAdmin, upload.single("video"), async (req
     if (!title || !req.file) return res.status(400).json({ error: "Le titre et le fichier vidéo sont obligatoires." });
     await assertVideoAtLeastOneHour(tempFile);
 
-    let publishAt = null;
-    if (req.body.publishAt) {
-      const scheduled = new Date(req.body.publishAt);
-      if (!Number.isFinite(scheduled.getTime()) || scheduled.getTime() < Date.now() + 2 * 60 * 1000)
-        return res.status(400).json({ error: "Choisissez une date future, au moins deux minutes à l'avance." });
-      publishAt = scheduled.toISOString();
-    }
-
     const client = createOAuthClient();
     if (!client) return res.status(503).json({ error: "Google OAuth n'est pas configuré dans Render." });
     client.setCredentials(tokens);
@@ -309,7 +301,6 @@ app.post("/api/youtube/upload", requireAdmin, upload.single("video"), async (req
     const episode = req.body.episodeNumber ? Number(req.body.episodeNumber) : null;
     const youtube = google.youtube({ version: "v3", auth: client });
     const status = { privacyStatus: "private", selfDeclaredMadeForKids: false };
-    if (publishAt) status.publishAt = publishAt;
 
     const result = await youtube.videos.insert({
       part: ["snippet", "status"],
@@ -323,7 +314,7 @@ app.post("/api/youtube/upload", requireAdmin, upload.single("video"), async (req
     if (pool && result.data.id) {
       await pool.query(
         "INSERT INTO video_uploads (video_id,title,description,category,season_number,episode_number,publish_at,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-        [result.data.id,title,description,category,season,episode,publishAt,publishAt ? "scheduled" : "uploaded-private"]
+        [result.data.id,title,description,category,season,episode,null,"uploaded-private"]
       );
     }
     res.json({
@@ -331,7 +322,7 @@ app.post("/api/youtube/upload", requireAdmin, upload.single("video"), async (req
       videoId: result.data.id,
       url: "https://www.youtube.com/watch?v=" + result.data.id,
       privacyStatus: "private",
-      publishAt
+      publishAt: null
     });
   } catch (error) {
     const detail = describeGoogleError(error);
@@ -416,13 +407,6 @@ app.post("/api/sources/loc/import", requireAdmin, async (req, res) => {
     if (!client) throw new Error("Google OAuth n'est pas configuré dans Render.");
     client.setCredentials(tokens);
     client.on("tokens", updated => savePersistentYoutubeTokens(updated).catch(err => console.error("YouTube token refresh save failed:", err.message)));
-    let publishAt = null;
-    if (req.body.publishAt) {
-      const scheduled = new Date(req.body.publishAt);
-      if (!Number.isFinite(scheduled.getTime()) || scheduled.getTime() < Date.now() + 2 * 60 * 1000)
-        throw new Error("Choisissez une date future, au moins deux minutes à l’avance.");
-      publishAt = scheduled.toISOString();
-    }
     const title = String(item.title || metadata.title || "Film du catalogue Library of Congress").trim().slice(0, 100);
     const description = [
       "Source : Library of Congress — National Screening Room",
@@ -435,17 +419,17 @@ app.post("/api/sources/loc/import", requireAdmin, async (req, res) => {
       part: ["snippet", "status"],
       requestBody: {
         snippet: { title, description, categoryId: "1" },
-        status: { privacyStatus: "private", selfDeclaredMadeForKids: false, ...(publishAt ? { publishAt } : {}) }
+        status: { privacyStatus: "private", selfDeclaredMadeForKids: false }
       },
       media: { body: fs.createReadStream(tempFile) }
     });
     if (pool && result.data.id) {
       await pool.query(
         "INSERT INTO video_uploads (video_id,title,description,category,publish_at,status) VALUES ($1,$2,$3,$4,$5,$6)",
-        [result.data.id, title, description, "film", publishAt, publishAt ? "scheduled" : "uploaded-private"]
+        [result.data.id, title, description, "film", null, "uploaded-private"]
       );
     }
-    res.json({ ok: true, title, videoId: result.data.id, url: "https://www.youtube.com/watch?v=" + result.data.id, privacyStatus: "private", publishAt });
+    res.json({ ok: true, title, videoId: result.data.id, url: "https://www.youtube.com/watch?v=" + result.data.id, privacyStatus: "private", publishAt: null });
   } catch (error) {
     console.error("Library of Congress import:", error.message);
     res.status(500).json({ error: "Import impossible : " + String(error.message).slice(0, 400) });
