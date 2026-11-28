@@ -131,7 +131,7 @@ async function searchFilmSources(q){
  try{
   const r=await fetch('/api/sources/loc/search?q='+encodeURIComponent(q));const d=await r.json();
   if(!r.ok)throw Error(d.error||'Recherche impossible.');
-  status.textContent=d.notice||'Résultats du catalogue.';
+  status.textContent=d.notice||'Résultats du catalogue.';box.dataset.loaded='true';
   box.innerHTML=(d.results||[]).map((v,i)=>'<article class="card" style="margin-top:10px"><strong>'+escapeHtml(v.title)+'</strong><p class="hint">'+escapeHtml(v.year)+' · '+(v.durationSeconds?Math.round(v.durationSeconds/60)+' min':'durée inconnue')+'</p><p class="hint">'+escapeHtml(v.description)+'</p>'+(v.rightsWarning?'<p class="bad hint">Attention : la fiche mentionne un élément lié au copyright ou aux droits.</p>':'')+'<details><summary class="hint">Voir les notes et la provenance</summary><p class="hint">'+escapeHtml((v.notes||[]).join(' · '))+'</p><a class="help-link" href="'+escapeHtml(v.url)+'" target="_blank" rel="noopener">Consulter la fiche officielle ↗</a></details><label class="check"><input type="checkbox" id="sourceRights'+i+'"><span>Je confirme avoir vérifié cette fiche et disposer des droits nécessaires pour redistribuer ce film sur YouTube.</span></label><button class="btn" type="button" data-source-url="'+escapeHtml(v.url)+'" data-source-index="'+i+'" '+(v.rightsWarning?'disabled':'')+'>Importer et envoyer vers YouTube</button></article>').join('')||'<p class="hint">Aucun film vidéo trouvé pour cette recherche.</p>';
   box.querySelectorAll('[data-source-url]').forEach(btn=>btn.addEventListener('click',()=>importLocFilm(btn)));
  }catch(err){status.textContent=err.message}
@@ -173,6 +173,7 @@ async function refresh(){
    else{el('oauthHint').textContent='Variables Google manquantes : '+(s.missingGoogleVariables||[]).join(', ');el('connectButton').classList.add('hidden')}
    el('configList').innerHTML='<p class="'+(s.adminConfigured?'good':'bad')+'">Mot de passe administrateur : '+(s.adminConfigured?'configuré':'manquant')+'</p><p class="'+(s.databaseConfigured?'good':'bad')+'">Base de données : '+(s.databaseConfigured?'configurée':'non configurée')+'</p><p class="'+(s.youtubeConfigured?'good':'bad')+'">Google OAuth : '+(s.youtubeConfigured?'configuré':'incomplet')+'</p><p>Variables Google manquantes : '+((s.missingGoogleVariables||[]).join(', ')||'aucune')+'</p>';
    await loadUploads();
+   if (!el('sourceResults').dataset.loaded) searchFilmSources(el('sourceQuery').value);
   }
  }catch(e){el('serverStatus').textContent='Serveur indisponible'}
 }
