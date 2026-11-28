@@ -562,7 +562,7 @@ async function runAutoSourcePipeline() {
     const discovered = [];
     for (const query of (config.queries || []).slice(0, 4)) {
       const result = await searchOpenSources(query);
-      discovered.push(...result.sources);
+      discovered.push(...result.sources.filter(source => source.autoEligible));
     }
     const unique = [...new Map(discovered.map(source => [source.id, source])).values()].slice(0, 24);
     for (const source of unique) {
@@ -588,6 +588,7 @@ async function runAutoSourcePipeline() {
       try {
         tempFile = path.join(uploadDir, "auto-" + crypto.randomBytes(16).toString("hex") + ".video");
         const source = await downloadOpenVideo(job.provider, job.provider_key, job.file_name, tempFile);
+        if (!source.autoEligible) throw new Error("La licence actuelle n'autorise pas l'envoi automatique. Vérification manuelle requise.");
         const youtube = google.youtube({ version: "v3", auth: oauth });
         const description = sourceYoutubeDescription(source);
         const title = String(source.title || job.title).trim().slice(0, 100);
