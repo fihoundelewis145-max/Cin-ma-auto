@@ -67,7 +67,7 @@ CINEMA AUTO peut utiliser Metricool comme service de programmation intermédiair
 Configurer dans Render > Environment, sans déposer les secrets dans GitHub :
 - `METRICOOL_API_TOKEN` : jeton API secret.
 - `METRICOOL_USER_ID` : identifiant du compte Metricool.
-- `METRICOOL_BLOG_ID` : identifiant de la marque qui contient la chaîne YouTube.
+- `METRICOOL_BLOG_ID` : identifiant de la marque qui contient la chaîne YouTube (marque détectée : `8413347`, déjà préremplie dans la configuration Render).
 - `PUBLIC_BASE_URL` : `https://cinema-auto.onrender.com`.
 - `METRICOOL_TIMEZONE` : `Africa/Porto-Novo`.
 
