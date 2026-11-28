@@ -563,8 +563,8 @@ async function runAutoSourcePipeline() {
     const unique = [...new Map(discovered.map(source => [source.id, source])).values()].slice(0, 24);
     for (const source of unique) {
       await pool.query(
-        \`INSERT INTO source_jobs (source_key,provider,provider_key,file_name,title,description,license,license_url,attribution,item_url)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (source_key) DO NOTHING\`,
+        `INSERT INTO source_jobs (source_key,provider,provider_key,file_name,title,description,license,license_url,attribution,item_url)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (source_key) DO NOTHING`,
         [source.id, source.provider, source.providerKey, source.fileName || null, source.title,
          source.description || "", source.license, source.licenseUrl || "", source.attribution || "", source.itemUrl]
       );
@@ -574,9 +574,9 @@ async function runAutoSourcePipeline() {
     // Upload sequentially: each next film starts only after the previous upload finishes.
     for (let index = 0; index < 2; index++) {
       const claimed = await pool.query(
-        \`UPDATE source_jobs SET status='downloading', attempts=attempts+1, updated_at=NOW()
+        `UPDATE source_jobs SET status='downloading', attempts=attempts+1, updated_at=NOW()
          WHERE id=(SELECT id FROM source_jobs WHERE status='pending' AND attempts<3 ORDER BY created_at ASC FOR UPDATE SKIP LOCKED LIMIT 1)
-         RETURNING *\`
+         RETURNING *`
       );
       const job = claimed.rows[0];
       if (!job) break;
