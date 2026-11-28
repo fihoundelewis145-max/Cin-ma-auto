@@ -31,19 +31,19 @@ function licenseFromArchive(metadata) {
       lowerRights.includes("no derivatives") || lowerRights.includes("no-derivatives")) return null;
 
   if (lowerUrl.includes("creativecommons.org/publicdomain/zero/") ||
-      /\bcc0\b/.test(lowerRights)) return { label: "CC0", url: licenseUrl || "https://creativecommons.org/publicdomain/zero/1.0/" };
+      /\bcc0\b/.test(lowerRights)) return { label: "CC0", url: licenseUrl || "https://creativecommons.org/publicdomain/zero/1.0/", autoEligible: true };
 
   if (lowerUrl.includes("creativecommons.org/licenses/by-sa/4.0") ||
       lowerUrl.includes("creativecommons.org/licenses/by-sa/3.0")) {
-    return { label: "CC BY-SA", url: licenseUrl };
+    return { label: "CC BY-SA", url: licenseUrl, autoEligible: false };
   }
   if (lowerUrl.includes("creativecommons.org/licenses/by/4.0") ||
       lowerUrl.includes("creativecommons.org/licenses/by/3.0")) {
-    return { label: "CC BY", url: licenseUrl };
+    return { label: "CC BY", url: licenseUrl, autoEligible: false };
   }
   if (lowerUrl.includes("creativecommons.org/publicdomain/mark/") ||
       /\bpublic domain\b/.test(lowerRights)) {
-    return { label: "Domaine public (déclaré par la fiche)", url: licenseUrl || "https://creativecommons.org/publicdomain/mark/1.0/" };
+    return { label: "Domaine public (déclaré par la fiche)", url: licenseUrl || "https://creativecommons.org/publicdomain/mark/1.0/", autoEligible: true };
   }
   return null;
 }
@@ -53,7 +53,7 @@ function licenseFromCommons(ext) {
   const url = cleanText(ext?.LicenseUrl?.value);
   if (!ALLOWED_COMMONS_LICENSES.test(label)) return null;
   if (/nc|nd|non.?commercial|no.?derivatives/i.test(label)) return null;
-  return { label, url };
+  return { label, url, autoEligible: /^(?:public domain|cc0)$/i.test(label) };
 }
 
 function safeFile(file) {
@@ -108,7 +108,7 @@ async function searchInternetArchive(query, limit = 8) {
         itemUrl: "https://archive.org/details/" + encodeURIComponent(identifier),
         sizeBytes: Number(file.size),
         format: path.extname(file.name).slice(1).toUpperCase(),
-        autoEligible: true
+        autoEligible: license.autoEligible
       };
     } catch (_) {
       return null;
@@ -155,7 +155,7 @@ async function searchWikimediaCommons(query, limit = 8) {
       itemUrl: "https://commons.wikimedia.org/wiki/" + encodeURIComponent(title.replace(/ /g, "_")),
       sizeBytes: size,
       format: ext.slice(1).toUpperCase(),
-      autoEligible: true
+      autoEligible: license.autoEligible
     };
   }).filter(Boolean);
 }
@@ -191,7 +191,8 @@ async function getOpenVideoSource(provider, providerKey, fileName) {
       attribution: cleanText(metadata.metadata?.creator || metadata.metadata?.publisher || ""),
       itemUrl: "https://archive.org/details/" + encodeURIComponent(providerKey),
       size: Number(file.size),
-      extension: path.extname(file.name).toLowerCase()
+      extension: path.extname(file.name).toLowerCase(),
+      autoEligible: license.autoEligible
     };
   }
 
@@ -221,7 +222,8 @@ async function getOpenVideoSource(provider, providerKey, fileName) {
       attribution: cleanText(info.extmetadata?.Artist?.value || ""),
       itemUrl: "https://commons.wikimedia.org/wiki/" + encodeURIComponent(title.replace(/ /g, "_")),
       size,
-      extension: path.extname(title).toLowerCase()
+      extension: path.extname(title).toLowerCase(),
+      autoEligible: license.autoEligible
     };
   }
 
