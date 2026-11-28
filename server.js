@@ -303,7 +303,7 @@ app.post("/api/sources/loc/import", requireAdmin, async (req, res) => {
     if (!metaResponse.ok) throw new Error("Impossible de lire la fiche du film dans le catalogue.");
     const metadata = await metaResponse.json();
     const item = metadata.item || metadata;
-    const notes = item.notes || [];
+    const notes = item.notes || metadata.notes || [];
     if (notes.some(n => /copyright notice|copyrighted|permission required|restricted use/i.test(n)))
       return res.status(403).json({ error: "La fiche contient une mention de copyright ou de restriction. Ce titre est bloqué pour éviter une republication non autorisée." });
     const record = metadata.resources?.find(r => typeof r.video === "string" && r.video.endsWith(".mp4"));
@@ -324,7 +324,7 @@ app.post("/api/sources/loc/import", requireAdmin, async (req, res) => {
     const description = [
       "Source : Library of Congress — National Screening Room",
       "Fiche source : " + itemUrl.href,
-      "Description : " + (item.summary || []).join(" ").slice(0, 3000),
+      "Description : " + (item.summary || metadata.summary || []).join(" ").slice(0, 3000),
       "Crédits et notes : " + notes.join(" ").slice(0, 1500)
     ].join("\\n\\n");
     const youtube = google.youtube({ version: "v3", auth: client });
