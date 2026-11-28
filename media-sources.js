@@ -90,7 +90,7 @@ async function searchInternetArchive(query, limit = 8) {
   const q = String(query || "").trim().replace(/["\\]/g, " ").slice(0, 100);
   if (q.length < 2) return [];
   const searchUrl = new URL("https://archive.org/advancedsearch.php");
-  searchUrl.searchParams.set("q", 'mediatype:movies AND title:("' + q + '")');
+  searchUrl.searchParams.set("q", 'mediatype:movies AND (title:("' + q + '") OR description:("' + q + '"))');
   for (const field of ["identifier", "title", "year", "description", "runtime"]) searchUrl.searchParams.append("fl[]", field);
   searchUrl.searchParams.set("rows", String(Math.min(Math.max(limit, 1), 10)));
   searchUrl.searchParams.set("output", "json");
