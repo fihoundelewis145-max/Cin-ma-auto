@@ -160,16 +160,40 @@ module.exports = function attachMetricoolRoutes(app, { requireAdmin, upload, poo
     if (!ticket || ticket.expiresAt < Date.now() || !fs.existsSync(ticket.filePath)) {
       return res.status(404).end();
     }
-    res.set({
+    let start = 0;
+    let end = ticket.size - 1;
+    let status = 200;
+    const range = req.headers.range;
+    if (range) {
+      const match = /^bytes=(\\d*)-(\\d*)$/.exec(range);
+      if (!match || (!match[1] && !match[2])) {
+        res.set("Content-Range", "bytes */" + ticket.size);
+        return res.status(416).end();
+      }
+      if (!match[1]) {
+        const suffix = Number(match[2]);
+        start = Math.max(ticket.size - suffix, 0);
+      } else {
+        start = Number(match[1]);
+        if (match[2]) end = Math.min(Number(match[2]), end);
+      }
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || start >= ticket.size) {
+        res.set("Content-Range", "bytes */" + ticket.size);
+        return res.status(416).end();
+      }
+      status = 206;
+      res.set("Content-Range", "bytes " + start + "-" + end + "/" + ticket.size);
+    }
+    res.status(status).set({
       "Content-Type": ticket.mimeType,
-      "Content-Length": String(ticket.size),
+      "Content-Length": String(end - start + 1),
       "Content-Disposition": 'inline; filename="' + encodeURIComponent(ticket.fileName).replace(/"/g, "") + '"',
       "Cache-Control": "no-store",
       "Accept-Ranges": "bytes",
       "X-Content-Type-Options": "nosniff"
     });
-    if (req.method === "HEAD") return res.status(200).end();
-    const stream = fs.createReadStream(ticket.filePath);
+    if (req.method === "HEAD") return res.end();
+    const stream = fs.createReadStream(ticket.filePath, { start, end });
     stream.on("error", () => { if (!res.headersSent) res.status(500).end(); else res.destroy(); });
     stream.pipe(res);
   }
