@@ -247,6 +247,8 @@ app.post("/api/youtube/upload", requireAdmin, upload.single("video"), async (req
   }
 });
 
+require("./metricool")(app, { requireAdmin, upload, pool });
+
 app.use((error, _req, res, _next) => {
   console.error("Request error:", error.message);
   res.status(400).json({ error: error.message || "Requête invalide." });
