@@ -555,6 +555,7 @@ async function runAutoSourcePipeline() {
     oauth.setCredentials(tokens);
     oauth.on("tokens", updated => savePersistentYoutubeTokens(updated).catch(err => console.error("Auto token refresh:", err.message)));
 
+    await pool.query("UPDATE source_jobs SET status='pending', updated_at=NOW() WHERE status='downloading' AND updated_at < NOW() - INTERVAL '30 minutes'");
     const discovered = [];
     for (const query of (config.queries || []).slice(0, 4)) {
       const result = await searchOpenSources(query);
@@ -572,7 +573,7 @@ async function runAutoSourcePipeline() {
     await pool.query("UPDATE source_auto_config SET last_scan_at=NOW(), last_error=NULL WHERE id=1");
 
     // Upload sequentially: each next film starts only after the previous upload finishes.
-    for (let index = 0; index < 2; index++) {
+    for (let index = 0; index < 10; index++) {
       const claimed = await pool.query(
         `UPDATE source_jobs SET status='downloading', attempts=attempts+1, updated_at=NOW()
          WHERE id=(SELECT id FROM source_jobs WHERE status='pending' AND attempts<3 ORDER BY created_at ASC FOR UPDATE SKIP LOCKED LIMIT 1)
@@ -603,7 +604,7 @@ async function runAutoSourcePipeline() {
           [uploaded.data.id, job.id]
         );
       } catch (error) {
-        const retryStatus = Number(job.attempts || 0) + 1 >= 3 ? "failed" : "pending";
+        const retryStatus = Number(job.attempts || 0) >= 3 ? "failed" : "pending";
         await pool.query(
           "UPDATE source_jobs SET status=$1, last_error=$2, updated_at=NOW() WHERE id=$3",
           [retryStatus, String(error.message || error).slice(0, 500), job.id]
