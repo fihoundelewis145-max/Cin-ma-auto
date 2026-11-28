@@ -107,7 +107,8 @@ async function searchInternetArchive(query, limit = 8) {
       const files = (metadata.files || []).filter(safeFile).sort((a, b) => Number(b.size) - Number(a.size));
       const file = files[0];
       if (!file) return null;
-      const durationSeconds = parseDurationSeconds(metadata.metadata?.runtime) ?? parseDurationSeconds(file.length);
+      const durationSeconds = parseDurationSeconds(metadata.metadata?.runtime ?? doc.runtime) ?? parseDurationSeconds(file.length);
+      if (durationSeconds !== null && durationSeconds <= 3600) return null;
       return {
         id: "ia:" + identifier + ":" + file.name,
         provider: "Internet Archive",
@@ -154,7 +155,7 @@ async function searchWikimediaCommons(query, limit = 8) {
     const license = licenseFromCommons(info?.extmetadata || {});
     const durationSeconds = parseDurationSeconds(info?.duration) ?? parseDurationSeconds(info?.extmetadata?.Duration?.value);
     const size = Number(info?.size || 0);
-    if (!info?.url || !license || ![".webm", ".mpg", ".mpeg"].includes(ext) || !size || size > MAX_BYTES) return null;
+    if (!info?.url || !license || ![".webm", ".mpg", ".mpeg"].includes(ext) || !size || size > MAX_BYTES || (durationSeconds !== null && durationSeconds <= 3600)) return null;
     const mediaUrl = new URL(info.url);
     if (mediaUrl.protocol !== "https:" || mediaUrl.hostname !== "upload.wikimedia.org") return null;
     const meta = info.extmetadata || {};
