@@ -334,7 +334,7 @@ app.post("/api/sources/loc/import", requireAdmin, async (req, res) => {
       "Fiche source : " + itemUrl.href,
       "Description : " + (item.summary || metadata.summary || []).join(" ").slice(0, 3000),
       "Crédits et notes : " + notes.join(" ").slice(0, 1500)
-    ].join("\\n\\n");
+    ].join("\n\n");
     const youtube = google.youtube({ version: "v3", auth: client });
     const result = await youtube.videos.insert({
       part: ["snippet", "status"],
