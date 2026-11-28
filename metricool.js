@@ -178,6 +178,7 @@ module.exports = function attachMetricoolRoutes(app, { requireAdmin, upload, poo
     const file = req.file;
     if (!file) return res.status(400).json({ error: "Sélectionnez une vidéo." });
     const cleanup = () => fs.promises.unlink(file.path).catch(() => {});
+    let mediaToken = null;
     try {
       if (!config().configured) {
         await cleanup();
@@ -209,6 +210,7 @@ module.exports = function attachMetricoolRoutes(app, { requireAdmin, upload, poo
       const videoType = String(req.body.youtubeType || "video") === "short" ? "short" : "video";
       const state = config();
       const token = crypto.randomBytes(32).toString("hex");
+      mediaToken = token;
       const baseUrl = String(process.env.PUBLIC_BASE_URL ||
         (req.protocol + "://" + req.get("host"))).replace(/\/+$/, "");
       const ticket = {
@@ -248,11 +250,15 @@ module.exports = function attachMetricoolRoutes(app, { requireAdmin, upload, poo
       const postId = post?.id ?? post?.postId ?? post?.uuid ?? null;
 
       if (pool) {
-        await pool.query(createTableSql);
-        await pool.query(
-          "INSERT INTO metricool_publications (metricool_post_id,title,description,publish_at,status) VALUES ($1,$2,$3,$4,$5)",
-          [postId === null ? null : String(postId), title, description, publishAt.toISOString(), "scheduled"]
-        );
+        try {
+          await pool.query(createTableSql);
+          await pool.query(
+            "INSERT INTO metricool_publications (metricool_post_id,title,description,publish_at,status) VALUES ($1,$2,$3,$4,$5)",
+            [postId === null ? null : String(postId), title, description, publishAt.toISOString(), "scheduled"]
+          );
+        } catch (historyError) {
+          console.error("Metricool history save:", historyError.message);
+        }
       }
       deleteTicket(token);
       res.json({
@@ -265,6 +271,7 @@ module.exports = function attachMetricoolRoutes(app, { requireAdmin, upload, poo
       });
     } catch (error) {
       console.error("Metricool publish:", error.message);
+      if (mediaToken) deleteTicket(mediaToken);
       await cleanup();
       res.status(error.status || 502).json({
         error: "Metricool n'a pas accepté la programmation : " + safeMessage(error.message)
