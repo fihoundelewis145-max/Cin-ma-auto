@@ -32,14 +32,14 @@ form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1
 <div class="tabs section"><a class="tab" href="#library">Bibliothèque & historique</a><a class="tab" href="#upload">Nouvelle publication</a><a class="tab" href="#connection">Connecter YouTube</a></div><div class="card section" id="sources">
  <h2>Sources de films et séries</h2>
  <p class="muted">CINEMA AUTO peut rechercher dans plusieurs archives ouvertes, télécharger les fichiers réutilisables et les envoyer sur YouTube dès que chaque fichier est prêt.</p>
- <div class="notice">La recherche automatique n'utilise que les fichiers dont les métadonnées indiquent une licence admise (domaine public, CC0, CC BY ou CC BY-SA). Les mentions machine-readable ne remplacent pas une vérification des droits sur les musiques, images, interprétations, marques et autres éléments du film. Les vidéos sont envoyées immédiatement en mode privé.</div>
+ <div class="notice">La recherche automatique n'envoie sans intervention que les fichiers explicitement indiqués comme domaine public ou CC0. Les licences CC BY et CC BY-SA restent accessibles à l'import manuel après vérification des conditions. Les mentions machine-readable ne remplacent pas une vérification des droits sur les musiques, images, interprétations, marques et autres éléments du film. Les vidéos sont envoyées immédiatement en mode privé.</div>
  <div class="card" style="margin:14px 0">
   <h3>Automatisation des sources</h3>
   <label class="check"><input id="autoSourceEnabled" type="checkbox"><span>Activer la recherche, le téléchargement et l'envoi automatiques</span></label>
   <label class="hint" for="autoSourceQueries">Termes de recherche (un par ligne, quatre maximum)</label>
   <textarea class="field" id="autoSourceQueries" rows="3">silent film
 public domain short film</textarea>
-  <label class="check"><input id="autoRightsConfirm" type="checkbox"><span>Je confirme que CINEMA AUTO doit retenir uniquement les licences affichées comme domaine public, CC0, CC BY ou CC BY-SA, et que je vérifierai les droits tiers avant toute diffusion publique.</span></label>
+  <label class="check"><input id="autoRightsConfirm" type="checkbox"><span>Je confirme que l'envoi sans intervention doit être limité au domaine public ou à CC0, et que je vérifierai les droits tiers avant toute diffusion publique.</span></label>
   <button class="btn" type="button" id="saveAutoSources">Enregistrer l'automatisation</button>
   <p class="hint" id="autoSourceStatus">Vérification de l'automatisation…</p>
   <p class="hint">Limite d'hébergement : le service Render gratuit s'endort après 15 minutes sans trafic entrant. Pendant le sommeil, la recherche automatique est interrompue. Pour une surveillance réellement continue, il faudra un hébergement toujours actif ou un Cron Render payant.</p>
