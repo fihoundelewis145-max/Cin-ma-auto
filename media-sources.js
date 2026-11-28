@@ -24,26 +24,27 @@ function cleanText(value) {
 function licenseFromArchive(metadata) {
   const licenseUrl = String(metadata.licenseurl || "").trim();
   const rights = cleanText(metadata.rights || "");
-  const lowerUrl = licenseUrl.toLowerCase();
   const lowerRights = rights.toLowerCase();
+  let parsedLicenseUrl = null;
+  try { parsedLicenseUrl = new URL(licenseUrl); } catch (_) {}
+  const isOfficialCcUrl = parsedLicenseUrl?.protocol === "https:" &&
+    ["creativecommons.org", "www.creativecommons.org"].includes(parsedLicenseUrl.hostname);
+  const licensePath = isOfficialCcUrl ? parsedLicenseUrl.pathname.toLowerCase() : "";
 
   if (lowerRights.includes("non-commercial") || lowerRights.includes("noncommercial") ||
       lowerRights.includes("no derivatives") || lowerRights.includes("no-derivatives")) return null;
 
-  if (lowerUrl.includes("creativecommons.org/publicdomain/zero/") ||
-      /\bcc0\b/.test(lowerRights)) return { label: "CC0", url: licenseUrl || "https://creativecommons.org/publicdomain/zero/1.0/", autoEligible: true };
-
-  if (lowerUrl.includes("creativecommons.org/licenses/by-sa/4.0") ||
-      lowerUrl.includes("creativecommons.org/licenses/by-sa/3.0")) {
+  if (licensePath.includes("/publicdomain/zero/")) {
+    return { label: "CC0", url: licenseUrl, autoEligible: true };
+  }
+  if (licensePath.includes("/licenses/by-sa/4.0") || licensePath.includes("/licenses/by-sa/3.0")) {
     return { label: "CC BY-SA", url: licenseUrl, autoEligible: false };
   }
-  if (lowerUrl.includes("creativecommons.org/licenses/by/4.0") ||
-      lowerUrl.includes("creativecommons.org/licenses/by/3.0")) {
+  if (licensePath.includes("/licenses/by/4.0") || licensePath.includes("/licenses/by/3.0")) {
     return { label: "CC BY", url: licenseUrl, autoEligible: false };
   }
-  if (lowerUrl.includes("creativecommons.org/publicdomain/mark/") ||
-      /\bpublic domain\b/.test(lowerRights)) {
-    return { label: "Domaine public (déclaré par la fiche)", url: licenseUrl || "https://creativecommons.org/publicdomain/mark/1.0/", autoEligible: true };
+  if (licensePath.includes("/publicdomain/mark/")) {
+    return { label: "Domaine public (marque Creative Commons officielle)", url: licenseUrl, autoEligible: true };
   }
   return null;
 }
@@ -53,7 +54,14 @@ function licenseFromCommons(ext) {
   const url = cleanText(ext?.LicenseUrl?.value);
   if (!ALLOWED_COMMONS_LICENSES.test(label)) return null;
   if (/nc|nd|non.?commercial|no.?derivatives/i.test(label)) return null;
-  return { label, url, autoEligible: /^(?:public domain|cc0)$/i.test(label) };
+  let parsed = null;
+  try { parsed = new URL(url); } catch (_) {}
+  const officialCc = parsed?.protocol === "https:" &&
+    ["creativecommons.org", "www.creativecommons.org"].includes(parsed.hostname);
+  const licensePath = officialCc ? parsed.pathname.toLowerCase() : "";
+  const isCc0 = /^cc0$/i.test(label) && licensePath.includes("/publicdomain/zero/");
+  const isPd = /^public domain$/i.test(label) && licensePath.includes("/publicdomain/mark/");
+  return { label, url, autoEligible: isCc0 || isPd };
 }
 
 function parseDurationSeconds(value) {
@@ -107,7 +115,7 @@ async function searchInternetArchive(query, limit = 8) {
       const files = (metadata.files || []).filter(safeFile).sort((a, b) => Number(b.size) - Number(a.size));
       const file = files[0];
       if (!file) return null;
-      const durationSeconds = parseDurationSeconds(metadata.metadata?.runtime ?? doc.runtime) ?? parseDurationSeconds(file.length);
+      const durationSeconds = parseDurationSeconds(metadata.metadata?.runtime ?? doc.runtime);
       if (durationSeconds !== null && durationSeconds <= 3600) return null;
       return {
         id: "ia:" + identifier + ":" + file.name,
@@ -201,7 +209,7 @@ async function getOpenVideoSource(provider, providerKey, fileName) {
     if (!license) throw new Error("La licence Internet Archive n'est pas explicitement réutilisable. Import bloqué.");
     const file = (metadata.files || []).find(item => item.name === fileName && safeFile(item));
     if (!file) throw new Error("Le fichier vidéo n'est plus disponible ou dépasse la limite autorisée.");
-    const durationSeconds = parseDurationSeconds(metadata.metadata?.runtime) ?? parseDurationSeconds(file.length);
+    const durationSeconds = parseDurationSeconds(metadata.metadata?.runtime);
     if (durationSeconds !== null && durationSeconds <= 3600) throw new Error("Vidéo écartée : durée inférieure ou égale à 1 heure.");
     return {
       url: "https://archive.org/download/" + encodeURIComponent(providerKey) + "/" + encodeURIComponent(file.name),
