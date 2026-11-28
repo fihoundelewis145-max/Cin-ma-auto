@@ -1,13 +1,13 @@
 # CINEMA AUTO 1.2
 
-Studio de gestion, importation et programmation de vidéos vers YouTube. Il est conçu pour des contenus originaux, libres de droits ou pour lesquels l'administrateur possède une licence écrite de redistribution. Il ne contourne pas les protections de MovieBox ou d'autres plateformes.
+Studio de recherche, téléchargement et envoi immédiat de vidéos autorisées vers YouTube. Il est conçu pour des contenus originaux, libres de droits ou pour lesquels l'administrateur possède une licence écrite de redistribution. Il ne contourne pas les protections de MovieBox ou d'autres plateformes.
 
 ## Infrastructure
 - Node.js 20 / Express
 - Render Web Service
 - Render PostgreSQL pour rendre les sessions et l'historique persistants
 - YouTube Data API v3 avec OAuth 2.0
-- Programmation native YouTube via `status.publishAt` (la vidéo est téléversée privée, YouTube la rend publique à l'heure future).
+- File d'attente séquentielle : téléchargement puis téléversement privé immédiat, sans heure de publication programmée.
 
 ## Déploiement Render
 Le fichier `render.yaml` décrit un service Web et une base PostgreSQL. Après synchronisation du Blueprint, vérifier que le service et la base `cinema-auto-db` existent et que `DATABASE_URL` est reliée à la base.
@@ -38,8 +38,9 @@ Node.js 20+, `npm install`, variables dans `.env`, puis `npm start`.
 ## Limitations à connaître
 - L'envoi vidéo utilise un fichier temporaire local Render : il ne constitue pas un stockage durable. Les grands fichiers nécessitent un disque persistant ou un stockage objet (S3/R2).
 - Les sessions et jetons OAuth sont désormais stockés dans PostgreSQL si `DATABASE_URL` est reliée.
-- La file d'importation automatique depuis des sites tiers n'est pas incluse ; seules les sources autorisées peuvent être automatisées.
-- Les vidéos sont programmées via l'API YouTube avec visibilité privée jusqu'à l'heure prévue.
+- Les sources Internet Archive et Wikimedia Commons affichées par le moteur automatique doivent présenter une licence explicite admise (domaine public, CC0, CC BY ou CC BY-SA). Les métadonnées ne remplacent pas la vérification des droits tiers.
+- La recherche automatique tourne dans le processus du service web. Sur le forfait gratuit Render, le service s'endort après 15 minutes sans trafic entrant ; une surveillance continue nécessite un service toujours actif ou un Cron payant.
+- Les vidéos de la file automatique sont téléversées immédiatement avec visibilité privée. Aucune publication à une heure future n'est programmée par ce flux.
 
 
 ## Liaison de la chaîne à vidIQ depuis CINEMA AUTO
