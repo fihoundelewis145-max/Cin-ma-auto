@@ -24,7 +24,7 @@ services:
       - key: METRICOOL_USER_ID
         sync: false
       - key: METRICOOL_BLOG_ID
-        sync: false
+        value: "8413347"
       - key: METRICOOL_TIMEZONE
         value: Africa/Porto-Novo
       - key: GOOGLE_CLIENT_ID
