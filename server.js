@@ -161,7 +161,8 @@ async function ensureSchema() {
     last_scan_at TIMESTAMPTZ,
     last_error TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )`);
+  );
+  await pool.query("ALTER TABLE source_jobs ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'film'");`);
   await pool.query("INSERT INTO source_auto_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING");
   await pool.query("UPDATE source_auto_config SET queries=ARRAY['feature film','feature-length movie','public domain television episode','classic television episode'] WHERE id=1 AND queries=ARRAY['silent film','public domain short film']");
   await pool.query(`CREATE TABLE IF NOT EXISTS source_jobs (
@@ -171,6 +172,7 @@ async function ensureSchema() {
     provider_key TEXT NOT NULL,
     file_name TEXT,
     title TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'film',
     description TEXT NOT NULL DEFAULT '',
     license TEXT NOT NULL,
     license_url TEXT NOT NULL DEFAULT '',
@@ -581,14 +583,15 @@ async function runAutoSourcePipeline() {
     const discovered = [];
     for (const query of (config.queries || []).slice(0, 4)) {
       const result = await searchOpenSources(query);
-      discovered.push(...result.sources.filter(source => source.autoEligible));
+      const category = /episode|television|tv show/i.test(query) ? "series" : "film";
+      discovered.push(...result.sources.filter(source => source.autoEligible).map(source => ({ ...source, category })));
     }
     const unique = [...new Map(discovered.map(source => [source.id, source])).values()].slice(0, 24);
     for (const source of unique) {
       await pool.query(
-        `INSERT INTO source_jobs (source_key,provider,provider_key,file_name,title,description,license,license_url,attribution,item_url)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (source_key) DO NOTHING`,
-        [source.id, source.provider, source.providerKey, source.fileName || null, source.title,
+        `INSERT INTO source_jobs (source_key,provider,provider_key,file_name,title,category,description,license,license_url,attribution,item_url)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (source_key) DO NOTHING`,
+        [source.id, source.provider, source.providerKey, source.fileName || null, source.title, source.category || "film",
          source.description || "", source.license, source.licenseUrl || "", source.attribution || "", source.itemUrl]
       );
     }
@@ -620,8 +623,8 @@ async function runAutoSourcePipeline() {
         });
         if (pool && uploaded.data.id) {
           await pool.query(
-            "INSERT INTO video_uploads (video_id,title,description,category,publish_at,status) VALUES ($1,$2,$3,'film',NULL,'uploaded-private')",
-            [uploaded.data.id, title, description]
+            "INSERT INTO video_uploads (video_id,title,description,category,publish_at,status) VALUES ($1,$2,$3,$4,NULL,'uploaded-private')",
+            [uploaded.data.id, title, description, job.category || "film"]
           );
         }
         await pool.query(
