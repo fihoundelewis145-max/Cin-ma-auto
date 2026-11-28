@@ -74,6 +74,8 @@ form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1
   <div class="integration-head"><span class="integration-icon" style="background:#14251d;color:#67dba3">M</span><div><strong>Metricool — relais de publication</strong><small>Programmation YouTube depuis CINEMA AUTO</small></div></div>
   <p class="muted">CINEMA AUTO transmettra les vidéos à votre calendrier Metricool. Metricool effectuera ensuite la publication sur la chaîne YouTube reliée à la marque.</p>
   <p class="hint" id="metricoolStatus">État Metricool : vérification…</p>
+  <button class="btn secondary" type="button" id="testMetricool">Tester la connexion API</button>
+  <p class="hint" id="metricoolTestResult"></p>
   <a class="btn secondary" id="connectMetricool" href="https://app.metricool.com/brands/connections?blogId=8413347" target="_blank" rel="noopener noreferrer">Relier YouTube à la marque Metricool ↗</a>
   <p class="hint">Pour activer l'envoi depuis ce site, le compte Metricool doit disposer d'un forfait Advanced ou Custom et d'un accès API. Récupérez le jeton dans Paramètres du compte → API, puis ajoutez METRICOOL_API_TOKEN et METRICOOL_USER_ID dans Render → Environment. L'identifiant de marque Metricool (8413347) est déjà prérempli. Le userId se lit dans l'URL de votre marque. Le jeton reste secret et ne doit pas être envoyé dans le chat.</p>
   <a class="help-link" href="https://help.metricool.com/fr/guide-de-base-pour-lintegration-api-r97af" target="_blank" rel="noopener noreferrer">Guide officiel de l'API Metricool</a>
@@ -146,5 +148,17 @@ el('uploadForm').addEventListener('submit',async e=>{
   e.target.reset();await loadUploads();
  }catch(err){m.textContent=err.message}
  finally{b.disabled=false}
-});el('logout').addEventListener('click',async()=>{await fetch('/api/logout',{method:'POST'});await refresh()});el('reloadUploads').addEventListener('click',loadUploads);refresh();
+});el('testMetricool').addEventListener('click',async()=>{
+ const button=el('testMetricool'),result=el('metricoolTestResult');
+ button.disabled=true;result.textContent='Vérification de la connexion API…';
+ try{
+  const r=await fetch('/api/metricool/brands');const d=await r.json();
+  if(!r.ok) throw Error(d.error+(d.missing?' — '+d.missing.join(', '):''));
+  const count=Array.isArray(d.brands)?d.brands.length:'';
+  result.textContent='Connexion API réussie'+(count!==''?' · '+count+' marque(s) accessible(s)':'')+'. Vérifiez que YouTube est bien relié à la marque utilisée.';
+  result.className='hint good';
+ }catch(err){result.textContent=err.message;result.className='hint bad'}
+ finally{button.disabled=false}
+});
+el('logout').addEventListener('click',async()=>{await fetch('/api/logout',{method:'POST'});await refresh()});el('reloadUploads').addEventListener('click',loadUploads);refresh();
 </script></body></html>
