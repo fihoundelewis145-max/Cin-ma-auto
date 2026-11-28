@@ -10,6 +10,8 @@ const { google } = require("googleapis");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const { Readable } = require("stream");
+const { pipeline } = require("stream/promises");
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
@@ -242,6 +244,108 @@ app.post("/api/youtube/upload", requireAdmin, upload.single("video"), async (req
     const detail = describeGoogleError(error);
     console.error("YouTube upload:", detail);
     res.status(500).json({ error: "YouTube a refusé l'envoi : " + detail });
+  } finally {
+    if (tempFile && fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+  }
+});
+
+
+const LOC_COLLECTION_API = "https://www.loc.gov/collections/national-screening-room/";
+app.get("/api/sources/loc/search", requireAdmin, async (req, res) => {
+  const q = String(req.query.q || "silent film").trim().slice(0, 120);
+  if (q.length < 2) return res.status(400).json({ error: "Saisissez au moins deux caractères." });
+  try {
+    const url = new URL(LOC_COLLECTION_API);
+    url.searchParams.set("fo", "json");
+    url.searchParams.set("c", "25");
+    url.searchParams.set("q", q);
+    url.searchParams.set("sp", "1");
+    const response = await fetch(url, { headers: { "User-Agent": "CINEMA-AUTO/1.0 (media rights review)" } });
+    if (!response.ok) throw new Error("Catalogue de la Library of Congress indisponible (" + response.status + ").");
+    const data = await response.json();
+    const results = (data.results || []).filter(item =>
+      Array.isArray(item.online_format) && item.online_format.includes("video") &&
+      Array.isArray(item.resources) && item.resources.some(r => typeof r.video === "string" && r.video.endsWith(".mp4"))
+    ).map(item => {
+      const notes = item.item?.notes || [];
+      const rightsWarning = notes.some(n => /copyright|permission|restricted|rights reserved/i.test(n));
+      return {
+        title: item.title || item.item?.title || "Sans titre",
+        year: item.date || "",
+        url: item.url,
+        videoAvailable: true,
+        durationSeconds: item.resources?.[0]?.duration || null,
+        description: (item.description || item.item?.summary || []).join(" ").slice(0, 500),
+        notes: notes.slice(0, 5),
+        rightsWarning,
+        source: "Library of Congress — National Screening Room"
+      };
+    });
+    res.json({ source: "Library of Congress — National Screening Room", results,
+      notice: "Le statut libre de droits doit être vérifié pour chaque film. La présence dans le catalogue ne garantit pas le droit de republication." });
+  } catch (error) {
+    res.status(502).json({ error: error.message });
+  }
+});
+
+app.post("/api/sources/loc/import", requireAdmin, async (req, res) => {
+  let tempFile = null;
+  try {
+    if (req.body?.rightsConfirmed !== true) return res.status(400).json({ error: "Confirmez les droits de redistribution de ce film avant l'envoi." });
+    const itemUrl = new URL(String(req.body.itemUrl || ""));
+    if (itemUrl.protocol !== "https:" || itemUrl.hostname !== "www.loc.gov" || !/^\\/item\\/[A-Za-z0-9._-]+\\/?$/.test(itemUrl.pathname))
+      return res.status(400).json({ error: "Référence Library of Congress invalide." });
+    const tokens = req.session.youtubeTokens;
+    if (!tokens) return res.status(401).json({ error: "Connectez d'abord votre chaîne YouTube à CINEMA AUTO." });
+    const metaUrl = new URL(itemUrl.pathname, "https://www.loc.gov");
+    metaUrl.searchParams.set("fo", "json");
+    const metaResponse = await fetch(metaUrl, { headers: { "User-Agent": "CINEMA-AUTO/1.0" } });
+    if (!metaResponse.ok) throw new Error("Impossible de lire la fiche du film dans le catalogue.");
+    const metadata = await metaResponse.json();
+    const item = metadata.item || metadata;
+    const notes = item.notes || [];
+    if (notes.some(n => /copyright notice|copyrighted|permission required|restricted use/i.test(n)))
+      return res.status(403).json({ error: "La fiche contient une mention de copyright ou de restriction. Ce titre est bloqué pour éviter une republication non autorisée." });
+    const record = metadata.resources?.find(r => typeof r.video === "string" && r.video.endsWith(".mp4"));
+    if (!record?.video) return res.status(404).json({ error: "Aucun fichier MP4 direct n'est disponible pour ce titre." });
+    const mediaUrl = new URL(record.video);
+    if (mediaUrl.protocol !== "https:" || mediaUrl.hostname !== "tile.loc.gov")
+      return res.status(400).json({ error: "Hôte vidéo non autorisé." });
+    const mediaResponse = await fetch(mediaUrl, { redirect: "error" });
+    if (!mediaResponse.ok || !mediaResponse.body) throw new Error("Téléchargement du média refusé par la source.");
+    const length = Number(mediaResponse.headers.get("content-length") || 0);
+    if (length > 1500 * 1024 * 1024) throw new Error("Ce fichier dépasse la limite d'import de 1,5 Go.");
+    tempFile = path.join(uploadDir, "loc-" + crypto.randomBytes(16).toString("hex") + ".mp4");
+    await pipeline(Readable.fromWeb(mediaResponse.body), fs.createWriteStream(tempFile));
+    const client = createOAuthClient();
+    if (!client) throw new Error("Google OAuth n'est pas configuré dans Render.");
+    client.setCredentials(tokens);
+    const title = String(item.title || metadata.title || "Film du catalogue Library of Congress").trim().slice(0, 100);
+    const description = [
+      "Source : Library of Congress — National Screening Room",
+      "Fiche source : " + itemUrl.href,
+      "Description : " + (item.summary || []).join(" ").slice(0, 3000),
+      "Crédits et notes : " + notes.join(" ").slice(0, 1500)
+    ].join("\\n\\n");
+    const youtube = google.youtube({ version: "v3", auth: client });
+    const result = await youtube.videos.insert({
+      part: ["snippet", "status"],
+      requestBody: {
+        snippet: { title, description, categoryId: "1" },
+        status: { privacyStatus: "private", selfDeclaredMadeForKids: false }
+      },
+      media: { body: fs.createReadStream(tempFile) }
+    });
+    if (pool && result.data.id) {
+      await pool.query(
+        "INSERT INTO video_uploads (video_id,title,description,category,status) VALUES ($1,$2,$3,$4,$5)",
+        [result.data.id, title, description, "film", "uploaded-private"]
+      );
+    }
+    res.json({ ok: true, title, videoId: result.data.id, url: "https://www.youtube.com/watch?v=" + result.data.id, privacyStatus: "private" });
+  } catch (error) {
+    console.error("Library of Congress import:", error.message);
+    res.status(500).json({ error: "Import impossible : " + String(error.message).slice(0, 400) });
   } finally {
     if (tempFile && fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
   }
