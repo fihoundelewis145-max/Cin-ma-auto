@@ -111,6 +111,40 @@ module.exports = function attachMetricoolRoutes(app, { requireAdmin, upload, poo
     }
   });
 
+  app.get("/api/metricool/connection", requireAdmin, async (_req, res) => {
+    const state = config();
+    if (!state.configured) return res.status(503).json({
+      connected: false,
+      error: "La vérification automatique nécessite les identifiants API Metricool dans Render.",
+      missing: state.missing
+    });
+    try {
+      const blogId = String(process.env.METRICOOL_BLOG_ID || DEFAULT_METRICOOL_BLOG_ID);
+      const result = await metricoolRequest("/v2/settings/brands/" + encodeURIComponent(blogId));
+      const brand = result?.data || result;
+      let youtube = brand?.networksData?.youtubeData ?? brand?.youtubeData ?? null;
+      if (typeof youtube === "string") {
+        try { youtube = JSON.parse(youtube); } catch (_) { youtube = youtube.trim() || null; }
+      }
+      const connected = Boolean(youtube && (
+        (typeof youtube === "object" && (youtube.username || youtube.providerUserId)) ||
+        typeof youtube === "string"
+      ));
+      res.json({
+        ok: true,
+        connected,
+        channelName: typeof youtube === "object" ? (youtube.username || "") : "",
+        brandName: brand?.title || brand?.label || "",
+        blogId
+      });
+    } catch (error) {
+      res.status(error.status || 502).json({
+        connected: false,
+        error: "Impossible de vérifier la chaîne YouTube dans Metricool : " + error.message
+      });
+    }
+  });
+
   app.get("/api/metricool/scheduled", requireAdmin, async (req, res) => {
     if (!config().configured) return res.status(503).json({
       error: "Configurez les identifiants API Metricool dans Render.",
