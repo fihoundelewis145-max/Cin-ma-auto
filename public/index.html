@@ -112,7 +112,18 @@ async function refresh(){
  }catch(e){el('serverStatus').textContent='Serveur indisponible'}
 }
 async function loadUploads(){
- try{const r=await fetch('/api/uploads');const d=await r.json();if(!r.ok)throw Error(d.error);el('totalVideos').textContent=d.uploads.length;el('uploadRows').innerHTML=d.uploads.length?d.uploads.map(v=>'<tr><td>'+escapeHtml(v.title)+'</td><td>'+escapeHtml(v.category)+'</td><td>'+(v.publish_at?new Date(v.publish_at).toLocaleString():'Non programmée')+'</td><td>'+escapeHtml(v.status)+'</td><td><a target="_blank" rel="noopener" href="https://youtube.com/watch?v='+encodeURIComponent(v.video_id)+'">Voir</a></td></tr>').join(''):'<tr><td colspan="5">Aucune vidéo importée.</td></tr>'}catch(e){el('uploadRows').innerHTML='<tr><td colspan="5">'+escapeHtml(e.message)+'</td></tr>'}
+ try{
+  const [youtubeResult,metricoolResult]=await Promise.all([
+   fetch('/api/uploads').then(async r=>({ok:r.ok,data:await r.json()})),
+   fetch('/api/metricool/history').then(async r=>({ok:r.ok,data:await r.json()}))
+  ]);
+  if(!youtubeResult.ok) throw Error(youtubeResult.data.error||'Historique YouTube indisponible.');
+  const youtubeRows=(youtubeResult.data.uploads||[]).map(v=>({title:v.title,category:v.category,publish_at:v.publish_at,status:v.status,link:'https://youtube.com/watch?v='+encodeURIComponent(v.video_id),channel:'YouTube direct'}));
+  const metricoolRows=metricoolResult.ok?(metricoolResult.data.publications||[]).map(v=>({title:v.title,category:'Metricool',publish_at:v.publish_at,status:v.status,link:'',channel:v.metricool_post_id?'Metricool · '+v.metricool_post_id:'Metricool'})):[];
+  const rows=[...metricoolRows,...youtubeRows].sort((a,b)=>new Date(b.publish_at||0)-new Date(a.publish_at||0));
+  el('totalVideos').textContent=rows.length;
+  el('uploadRows').innerHTML=rows.length?rows.map(v=>'<tr><td>'+escapeHtml(v.title)+'</td><td>'+escapeHtml(v.category)+'</td><td>'+(v.publish_at?new Date(v.publish_at).toLocaleString():'Non programmée')+'</td><td>'+escapeHtml(v.status)+'</td><td>'+(v.link?'<a target="_blank" rel="noopener" href="'+escapeHtml(v.link)+'">Voir</a>':escapeHtml(v.channel))+'</td></tr>').join(''):'<tr><td colspan="5">Aucune vidéo importée.</td></tr>';
+ }catch(e){el('uploadRows').innerHTML='<tr><td colspan="5">'+escapeHtml(e.message)+'</td></tr>'}
 }
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 el('loginForm').addEventListener('submit',async e=>{e.preventDefault();const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:new FormData(e.target).get('password')})});const d=await r.json();el('loginMessage').textContent=r.ok?'Connexion réussie.':d.error;await refresh()});
