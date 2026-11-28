@@ -19,6 +19,8 @@ services:
           property: connectionString
       - key: PUBLIC_BASE_URL
         value: https://cinema-auto.onrender.com
+      - key: AUTO_SEARCH_ENABLED
+        value: "true"
       - key: METRICOOL_API_TOKEN
         sync: false
       - key: METRICOOL_USER_ID
