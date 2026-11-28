@@ -12,6 +12,21 @@ const fs = require("fs");
 const crypto = require("crypto");
 const { Readable } = require("stream");
 const { pipeline } = require("stream/promises");
+const { execFile } = require("child_process");
+const { promisify } = require("util");
+const execFileAsync = promisify(execFile);
+const ffprobePath = require("ffprobe-static").path;
+
+async function assertVideoAtLeastOneHour(filePath) {
+  const { stdout } = await execFileAsync(ffprobePath, [
+    "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filePath
+  ], { timeout: 120000, maxBuffer: 1024 * 1024 });
+  const seconds = Number(String(stdout).trim());
+  if (!Number.isFinite(seconds) || seconds < 3600) {
+    throw new Error("Vidéo refusée : durée détectée " + (Number.isFinite(seconds) ? Math.floor(seconds / 60) + " minutes" : "inconnue") + ". CINEMA AUTO accepte uniquement les vidéos de plus de 1 heure.");
+  }
+  return seconds;
+}
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
@@ -269,6 +284,7 @@ app.post("/api/youtube/upload", requireAdmin, upload.single("video"), async (req
     const title = String(req.body.title || "").trim().slice(0, 100);
     const description = String(req.body.description || "").trim().slice(0, 5000);
     if (!title || !req.file) return res.status(400).json({ error: "Le titre et le fichier vidéo sont obligatoires." });
+    await assertVideoAtLeastOneHour(tempFile);
 
     let publishAt = null;
     if (req.body.publishAt) {
@@ -392,6 +408,7 @@ app.post("/api/sources/loc/import", requireAdmin, async (req, res) => {
     if (length > 1500 * 1024 * 1024) throw new Error("Ce fichier dépasse la limite d'import de 1,5 Go.");
     tempFile = path.join(uploadDir, "loc-" + crypto.randomBytes(16).toString("hex") + ".mp4");
     await pipeline(Readable.fromWeb(mediaResponse.body), fs.createWriteStream(tempFile));
+    await assertVideoAtLeastOneHour(tempFile);
     const client = createOAuthClient();
     if (!client) throw new Error("Google OAuth n'est pas configuré dans Render.");
     client.setCredentials(tokens);
@@ -475,6 +492,7 @@ app.post("/api/sources/open/import", requireAdmin, async (req, res) => {
     if (!tokens) return res.status(401).json({ error: "Connectez d'abord la chaîne YouTube à CINEMA AUTO." });
     tempFile = path.join(uploadDir, "open-" + crypto.randomBytes(16).toString("hex") + ".video");
     const source = await downloadOpenVideo(provider, providerKey, fileName, tempFile);
+    await assertVideoAtLeastOneHour(tempFile);
     const client = createOAuthClient();
     if (!client) return res.status(503).json({ error: "Google OAuth n'est pas configuré dans Render." });
     client.setCredentials(tokens);
@@ -588,6 +606,8 @@ async function runAutoSourcePipeline() {
       try {
         tempFile = path.join(uploadDir, "auto-" + crypto.randomBytes(16).toString("hex") + ".video");
         const source = await downloadOpenVideo(job.provider, job.provider_key, job.file_name, tempFile);
+        const durationSeconds = await assertVideoAtLeastOneHour(tempFile);
+        console.log("Auto source accepted:", job.title, Math.floor(durationSeconds / 60), "minutes");
         if (!source.autoEligible) throw new Error("La licence actuelle n'autorise pas l'envoi automatique. Vérification manuelle requise.");
         const youtube = google.youtube({ version: "v3", auth: oauth });
         const description = sourceYoutubeDescription(source);
