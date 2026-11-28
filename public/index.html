@@ -35,6 +35,7 @@ form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1
  <div class="notice">Attention : tous les films du catalogue ne sont pas libres de republication. Vérifie les droits de chaque titre. Les mentions de copyright explicites sont bloquées automatiquement. N'importe que les œuvres dont tu as le droit de redistribution.</div>
  <form id="sourceSearchForm">
   <input class="field" id="sourceQuery" name="q" value="silent film" placeholder="Rechercher un film, un thème, un titre…" required>
+  <label class="hint">Date de publication YouTube (facultatif — laisser vide pour envoyer en privé)</label><input class="field" id="sourcePublishAt" type="datetime-local">
   <button class="btn secondary" id="sourceSearchButton">Rechercher dans le catalogue</button>
   <div class="hint" id="sourceSearchStatus">Source active : Library of Congress — National Screening Room.</div>
  </form>
@@ -143,9 +144,9 @@ async function importLocFilm(button){
  if(!confirm('Le film sera envoyé sur ta chaîne YouTube en mode privé. Confirmer ?'))return;
  button.disabled=true;button.textContent='Téléchargement et envoi en cours…';
  try{
-  const r=await fetch('/api/sources/loc/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itemUrl:button.dataset.sourceUrl,rightsConfirmed:true})});
+  const r=await fetch('/api/sources/loc/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itemUrl:button.dataset.sourceUrl,rightsConfirmed:true,publishAt:el('sourcePublishAt').value?localToIso(el('sourcePublishAt').value):''})});
   const d=await r.json();if(!r.ok)throw Error(d.error||'Import refusé.');
-  button.textContent='Envoyé en privé ✓';
+  button.textContent=d.publishAt?'Programmé ✓':'Envoyé en privé ✓';
   const link=document.createElement('a');link.href=d.url;link.target='_blank';link.rel='noopener';link.textContent='Ouvrir sur YouTube ↗';link.className='help-link';button.after(link);
   await loadUploads();
  }catch(err){button.disabled=false;button.textContent='Réessayer — '+err.message}
