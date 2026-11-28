@@ -24,19 +24,25 @@ form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1
 </style></head><body>
 <div class="shell"><aside class="side"><div class="brand">CINEMA <b>AUTO</b></div><div class="tag">VIDEO PUBLISHING STUDIO</div>
 <nav><a href="#dashboard">Vue d'ensemble</a><a href="#library">Bibliothèque</a><a href="#upload">Importer / programmer</a><a href="#connection">YouTube</a><a href="#settings">Configuration</a></nav>
-<p class="hint">Studio de publication · Version 1.2</p></aside>
+<p class="hint">Studio de publication · Version 1.3</p></aside>
 <main id="dashboard"><header class="top"><div><div class="eyebrow">CENTRE DE CONTRÔLE</div><h1>Tableau de bord</h1><div class="muted">Gérez les films, les épisodes et le calendrier de publication.</div></div><div class="status" id="serverStatus">Vérification…</div></header>
 <section class="card section" id="loginCard"><h2>Accès administrateur</h2><form id="loginForm"><input class="field" type="password" name="password" placeholder="Mot de passe administrateur" required><button class="btn">Se connecter</button><div class="hint" id="loginMessage">Utilisez le mot de passe défini dans Render.</div></form></section>
 <div id="appContent" class="hidden">
 <div class="grid"><div class="card"><small>Vidéos gérées</small><div class="metric" id="totalVideos">0</div><small>Enregistrées dans la bibliothèque</small></div><div class="card"><small>Chaîne YouTube</small><div class="metric" id="ytStatus">Non liée</div><small id="ytSub">Connexion Google OAuth requise</small></div><div class="card"><small>Base de données</small><div class="metric" id="dbStatus">—</div><small>Historique et sessions persistants</small></div></div>
 <div class="tabs section"><a class="tab" href="#library">Bibliothèque & historique</a><a class="tab" href="#upload">Nouvelle publication</a><a class="tab" href="#connection">Connecter YouTube</a></div>
 <div class="wide section"><section class="card" id="upload"><h2>Nouvelle publication</h2><form id="uploadForm">
+<label class="hint">Service de publication</label>
+<select class="field" name="destination" id="destination"><option value="metricool">Metricool — recommandée</option><option value="youtube">YouTube direct (Google OAuth)</option></select>
 <input class="field" name="title" maxlength="100" placeholder="Titre du film ou de la série" required>
 <textarea class="field" name="description" rows="3" placeholder="Description YouTube"></textarea>
 <select class="field" name="category"><option value="film">Film</option><option value="series">Série</option></select>
 <div class="grid" style="grid-template-columns:1fr 1fr"><input class="field" name="seasonNumber" type="number" min="1" placeholder="Saison (facultatif)"><input class="field" name="episodeNumber" type="number" min="1" placeholder="Épisode (facultatif)"></div>
 <label class="hint">Fichier vidéo</label><input class="field" type="file" name="video" accept="video/*" required>
 <label class="hint">Publication programmée (facultatif)</label><input class="field" id="publishAt" type="datetime-local" name="publishAt">
+<label class="hint">Vidéo conçue pour les enfants ? (obligatoire avec Metricool)</label>
+<select class="field" name="madeForKids" id="madeForKids"><option value="">Sélectionner l'audience…</option><option value="false">Non, pas conçue pour les enfants</option><option value="true">Oui, conçue pour les enfants</option></select>
+<label class="hint">Format YouTube (Metricool)</label>
+<select class="field" name="youtubeType" id="youtubeType"><option value="video">Vidéo standard</option><option value="short">Short</option></select>
 <label class="check"><input type="checkbox" name="rightsConfirmed" required><span>Je confirme que je possède les droits nécessaires pour publier cette vidéo sur YouTube.</span></label>
 <button class="btn" id="send">Envoyer sur YouTube</button><div class="hint" id="message">La vidéo sera envoyée en privé. Une date future permet de programmer sa publication publique.</div>
 </form></section>
@@ -62,6 +68,16 @@ form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1
   <p class="hint">La connexion vidIQ sert à ses analyses et outils. Elle ne remplace pas l'autorisation YouTube de CINEMA AUTO ci-dessus et ne donne pas automatiquement au site accès aux données privées vidIQ.</p>
   <a class="help-link" href="https://support.vidiq.com/en/articles/7988664-authenticating-your-channel-with-vidiq" target="_blank" rel="noopener noreferrer">Consulter le guide officiel de liaison vidIQ</a>
 </div>
+
+<div class="integration-divider"></div>
+<div class="integration">
+  <div class="integration-head"><span class="integration-icon" style="background:#14251d;color:#67dba3">M</span><div><strong>Metricool — relais de publication</strong><small>Programmation YouTube depuis CINEMA AUTO</small></div></div>
+  <p class="muted">CINEMA AUTO transmettra les vidéos à votre calendrier Metricool. Metricool effectuera ensuite la publication sur la chaîne YouTube reliée à la marque.</p>
+  <p class="hint" id="metricoolStatus">État Metricool : vérification…</p>
+  <a class="btn secondary" id="connectMetricool" href="https://app.metricool.com/brands/connections?blogId=8413347" target="_blank" rel="noopener noreferrer">Relier YouTube à la marque Metricool ↗</a>
+  <p class="hint">Pour activer l'envoi depuis ce site, le compte Metricool doit disposer d'un forfait Advanced ou Custom et d'un accès API. Récupérez le jeton dans Paramètres du compte → API, puis ajoutez METRICOOL_API_TOKEN, METRICOOL_USER_ID et METRICOOL_BLOG_ID dans Render → Environment. Le jeton reste secret et ne doit pas être envoyé dans le chat.</p>
+  <a class="help-link" href="https://help.metricool.com/fr/guide-de-base-pour-lintegration-api-r97af" target="_blank" rel="noopener noreferrer">Guide officiel de l'API Metricool</a>
+</div>
 <div class="notice">Important : CINEMA AUTO et vidIQ demandent deux autorisations distinctes. Les vidéos téléversées par CINEMA AUTO doivent être des contenus que vous êtes autorisé à redistribuer.</div>
 <p><button class="btn secondary" id="logout">Se déconnecter</button></p>
 </section></div>
@@ -77,6 +93,15 @@ async function refresh(){
   el('serverStatus').textContent=h.ok?'Service opérationnel':'Service indisponible';
   el('loginCard').classList.toggle('hidden',s.adminAuthenticated);el('appContent').classList.toggle('hidden',!s.adminAuthenticated);
   if(s.adminAuthenticated){
+   try {
+    const ms = await fetch('/api/metricool/status').then(r=>r.json());
+    el('metricoolStatus').textContent = ms.configured
+      ? 'API Metricool configurée. Le relais de publication est prêt.'
+      : 'Configuration incomplète : ' + (ms.missing || []).join(', ');
+    el('metricoolStatus').className = 'hint ' + (ms.configured ? 'good' : 'bad');
+   } catch (_) {
+    el('metricoolStatus').textContent = 'État Metricool indisponible.';
+   }
    el('ytStatus').textContent=s.youtubeConnected?'Connectée':'Non liée';el('ytSub').textContent=s.youtubeConnected?'Autorisation active dans cette session':'Autorisation Google requise';
    el('dbStatus').textContent=h.database?'Connectée':'Manquante';
    if(s.youtubeConfigured){el('oauthHint').textContent='Identifiants Google détectés. Autorisez la chaîne.';el('connectButton').classList.remove('hidden')}
@@ -91,6 +116,24 @@ async function loadUploads(){
 }
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 el('loginForm').addEventListener('submit',async e=>{e.preventDefault();const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:new FormData(e.target).get('password')})});const d=await r.json();el('loginMessage').textContent=r.ok?'Connexion réussie.':d.error;await refresh()});
-el('uploadForm').addEventListener('submit',async e=>{e.preventDefault();const b=el('send'),m=el('message');b.disabled=true;m.textContent='Envoi en cours…';const fd=new FormData(e.target);fd.set('rightsConfirmed',e.target.rightsConfirmed.checked?'true':'false');try{fd.set('publishAt',localToIso(fd.get('publishAt')));const r=await fetch('/api/youtube/upload',{method:'POST',body:fd});const d=await r.json();if(!r.ok)throw Error(d.error);m.textContent=d.publishAt?'Vidéo envoyée et programmée pour '+new Date(d.publishAt).toLocaleString():'Vidéo envoyée en privé.';e.target.reset();await loadUploads()}catch(err){m.textContent=err.message}finally{b.disabled=false}});
-el('logout').addEventListener('click',async()=>{await fetch('/api/logout',{method:'POST'});await refresh()});el('reloadUploads').addEventListener('click',loadUploads);refresh();
+el('uploadForm').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const b=el('send'),m=el('message'),fd=new FormData(e.target);
+ const destination=fd.get('destination');
+ b.disabled=true;m.textContent='Envoi en cours…';
+ fd.set('rightsConfirmed',e.target.rightsConfirmed.checked?'true':'false');
+ try{
+  if(destination==='metricool'&&!fd.get('madeForKids')) throw Error('Précisez si la vidéo est conçue pour les enfants.');
+  fd.set('publishAt',localToIso(fd.get('publishAt')));
+  const endpoint=destination==='metricool'?'/api/metricool/publish':'/api/youtube/upload';
+  const r=await fetch(endpoint,{method:'POST',body:fd});
+  const d=await r.json();
+  if(!r.ok) throw Error(d.error+(d.missing?' — '+d.missing.join(', '):''));
+  m.textContent=destination==='metricool'
+   ? 'Vidéo transmise à Metricool et programmée pour '+new Date(d.publishAt).toLocaleString()+(d.postId?' · Publication n° '+d.postId:'')
+   : (d.publishAt?'Vidéo envoyée et programmée pour '+new Date(d.publishAt).toLocaleString():'Vidéo envoyée en privé.');
+  e.target.reset();await loadUploads();
+ }catch(err){m.textContent=err.message}
+ finally{b.disabled=false}
+});el('logout').addEventListener('click',async()=>{await fetch('/api/logout',{method:'POST'});await refresh()});el('reloadUploads').addEventListener('click',loadUploads);refresh();
 </script></body></html>
