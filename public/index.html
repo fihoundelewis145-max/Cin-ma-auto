@@ -61,20 +61,16 @@ public domain short film</textarea>
  <div id="sourceResults" class="section"></div>
 </div>
 <div class="wide section"><section class="card" id="upload"><h2>Nouvelle publication</h2><form id="uploadForm">
-<label class="hint">Service de publication</label>
-<select class="field" name="destination" id="destination"><option value="metricool">Metricool — recommandée</option><option value="youtube">YouTube direct (Google OAuth)</option></select>
+<input type="hidden" name="destination" value="youtube">
+<p class="hint">Envoi direct vers la chaîne YouTube connectée. La vidéo part dès que le transfert est prêt ; aucune heure de publication n'est programmée.</p>
 <input class="field" name="title" maxlength="100" placeholder="Titre du film ou de la série" required>
 <textarea class="field" name="description" rows="3" placeholder="Description YouTube"></textarea>
 <select class="field" name="category"><option value="film">Film</option><option value="series">Série</option></select>
 <div class="grid" style="grid-template-columns:1fr 1fr"><input class="field" name="seasonNumber" type="number" min="1" placeholder="Saison (facultatif)"><input class="field" name="episodeNumber" type="number" min="1" placeholder="Épisode (facultatif)"></div>
 <label class="hint">Fichier vidéo</label><input class="field" type="file" name="video" accept="video/*" required>
-<label class="hint">Publication programmée (facultatif)</label><input class="field" id="publishAt" type="datetime-local" name="publishAt">
-<label class="hint">Vidéo conçue pour les enfants ? (obligatoire avec Metricool)</label>
-<select class="field" name="madeForKids" id="madeForKids"><option value="">Sélectionner l'audience…</option><option value="false">Non, pas conçue pour les enfants</option><option value="true">Oui, conçue pour les enfants</option></select>
-<label class="hint">Format YouTube (Metricool)</label>
-<select class="field" name="youtubeType" id="youtubeType"><option value="video">Vidéo standard</option><option value="short">Short</option></select>
+ 
 <label class="check"><input type="checkbox" name="rightsConfirmed" required><span>Je confirme que je possède les droits nécessaires pour publier cette vidéo sur YouTube.</span></label>
-<button class="btn" id="send">Envoyer sur YouTube</button><div class="hint" id="message">La vidéo sera envoyée en privé. Une date future permet de programmer sa publication publique.</div>
+<button class="btn" id="send">Envoyer sur YouTube</button><div class="hint" id="message">La vidéo est envoyée immédiatement en privé dès que le transfert est terminé. Aucune programmation horaire n'est utilisée.</div>
 </form></section>
 <section class="card" id="connection">
 <h2>Connexions des chaînes</h2>
@@ -122,7 +118,7 @@ public domain short film</textarea>
 </section></div>
 <section class="card section" id="library"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><h2>Bibliothèque et historique</h2><button class="btn secondary" id="reloadUploads">Actualiser</button></div><div class="scroll"><table class="table"><thead><tr><th>Titre</th><th>Type</th><th>Publication</th><th>État</th><th>YouTube</th></tr></thead><tbody id="uploadRows"><tr><td colspan="5" class="hint">Aucune vidéo importée.</td></tr></tbody></table></div></section>
 <section class="card section" id="settings"><h2>Configuration du service</h2><div class="hint" id="configList">Chargement…</div></section></div>
-<p class="hint">Les programmes YouTube sont publiés par YouTube à l'heure prévue. Les jetons OAuth et les sessions nécessitent un stockage persistant. Pour les gros fichiers, ajoutez un stockage objet ou disque persistant.</p></main></div>
+<p class="hint">Les vidéos de la file automatique sont téléversées immédiatement en privé après téléchargement. Les contenus publics nécessitent une vérification des droits. Les gros fichiers nécessitent un stockage adapté ; le service gratuit Render peut s'arrêter lorsqu'il est inactif.</p></main></div>
 <script>
 const el=id=>document.getElementById(id);
 function localToIso(value){if(!value)return "";const d=new Date(value);if(!Number.isFinite(d.getTime()))throw Error("Date de programmation invalide.");if(d.getTime()<Date.now()+120000)throw Error("Choisissez une heure située au moins deux minutes dans le futur.");return d.toISOString()}
