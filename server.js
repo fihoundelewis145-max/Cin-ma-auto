@@ -161,8 +161,7 @@ async function ensureSchema() {
     last_scan_at TIMESTAMPTZ,
     last_error TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  await pool.query("ALTER TABLE source_jobs ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'film'");`);
+  )`);
   await pool.query("INSERT INTO source_auto_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING");
   await pool.query("UPDATE source_auto_config SET queries=ARRAY['feature film','feature-length movie','public domain television episode','classic television episode'] WHERE id=1 AND queries=ARRAY['silent film','public domain short film']");
   await pool.query(`CREATE TABLE IF NOT EXISTS source_jobs (
@@ -185,6 +184,7 @@ async function ensureSchema() {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
+  await pool.query("ALTER TABLE source_jobs ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'film'");
 }
 ensureSchema().catch(err => console.error("Database schema initialization failed:", err.message));
 
