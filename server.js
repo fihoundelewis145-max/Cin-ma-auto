@@ -69,6 +69,44 @@ function createOAuthClient() {
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) return null;
   return new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
 }
+
+function tokenEncryptionKey() {
+  const secret = String(process.env.SESSION_SECRET || "");
+  if (!secret) throw new Error("SESSION_SECRET est requis pour protéger le jeton YouTube.");
+  return crypto.createHash("sha256").update(secret).digest();
+}
+function encryptTokenObject(tokens) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", tokenEncryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(tokens), "utf8"), cipher.final()]);
+  return [iv.toString("base64"), cipher.getAuthTag().toString("base64"), encrypted.toString("base64")].join(".");
+}
+function decryptTokenObject(value) {
+  const [ivPart, tagPart, dataPart] = String(value || "").split(".");
+  if (!ivPart || !tagPart || !dataPart) return null;
+  const decipher = crypto.createDecipheriv("aes-256-gcm", tokenEncryptionKey(), Buffer.from(ivPart, "base64"));
+  decipher.setAuthTag(Buffer.from(tagPart, "base64"));
+  return JSON.parse(Buffer.concat([decipher.update(Buffer.from(dataPart, "base64")), decipher.final()]).toString("utf8"));
+}
+async function savePersistentYoutubeTokens(tokens) {
+  if (!pool || !tokens) return;
+  await ensureSchema();
+  const previous = await loadPersistentYoutubeTokens();
+  const merged = { ...(previous || {}), ...tokens };
+  await pool.query(
+    "INSERT INTO app_settings (key,value) VALUES ('youtube_tokens',$1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW()",
+    [encryptTokenObject(merged)]
+  );
+}
+async function loadPersistentYoutubeTokens() {
+  if (!pool) return null;
+  await ensureSchema();
+  const result = await pool.query("SELECT value FROM app_settings WHERE key='youtube_tokens'");
+  if (!result.rows[0]) return null;
+  try { return decryptTokenObject(result.rows[0].value); }
+  catch (error) { console.error("Unable to decrypt saved YouTube tokens:", error.message); return null; }
+}
+
 function requireAdmin(req, res, next) {
   if (req.session?.admin === true) return next();
   return res.status(401).json({ error: "Connectez-vous à l'espace administrateur." });
@@ -96,6 +134,38 @@ async function ensureSchema() {
     publish_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     status TEXT NOT NULL DEFAULT 'scheduled'
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS source_auto_config (
+    id SMALLINT PRIMARY KEY CHECK (id = 1),
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    rights_policy_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+    queries TEXT[] NOT NULL DEFAULT ARRAY['silent film','public domain short film'],
+    last_scan_at TIMESTAMPTZ,
+    last_error TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await pool.query("INSERT INTO source_auto_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING");
+  await pool.query(`CREATE TABLE IF NOT EXISTS source_jobs (
+    id BIGSERIAL PRIMARY KEY,
+    source_key TEXT UNIQUE NOT NULL,
+    provider TEXT NOT NULL,
+    provider_key TEXT NOT NULL,
+    file_name TEXT,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    license TEXT NOT NULL,
+    license_url TEXT NOT NULL DEFAULT '',
+    attribution TEXT NOT NULL DEFAULT '',
+    item_url TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    video_id TEXT,
+    last_error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
 }
 ensureSchema().catch(err => console.error("Database schema initialization failed:", err.message));
@@ -162,6 +232,8 @@ app.get("/auth/youtube/callback", requireAdmin, async (req, res) => {
     const { tokens } = await client.getToken(req.query.code);
     if (!tokens.access_token) return res.status(502).send("Google n'a pas fourni de jeton d'accès.");
     req.session.youtubeTokens = { ...req.session.youtubeTokens, ...tokens };
+    try { await savePersistentYoutubeTokens(tokens); }
+    catch (persistError) { console.error("Persistent YouTube token save failed:", persistError.message); }
     req.session.save(err => {
       if (err) return res.status(500).send("La session Google n'a pas pu être enregistrée.");
       res.redirect("/?youtube=connected");
@@ -359,6 +431,196 @@ app.post("/api/sources/loc/import", requireAdmin, async (req, res) => {
   }
 });
 
+
+const { searchOpenSources, downloadOpenVideo } = require("./media-sources");
+
+app.get("/api/sources/open/search", requireAdmin, async (req, res) => {
+  const q = String(req.query.q || "").trim().slice(0, 100);
+  if (q.length < 2) return res.status(400).json({ error: "Saisissez au moins deux caractères." });
+  try {
+    const result = await searchOpenSources(q);
+    res.json({
+      query: q,
+      sources: result.sources,
+      providers: result.providers,
+      notice: "Seuls les fichiers avec une licence machine-readable admise (domaine public, CC0, CC BY ou CC BY-SA) sont affichés. Vérifiez toujours la fiche et les éventuels droits tiers."
+    });
+  } catch (error) {
+    res.status(502).json({ error: "Recherche des archives impossible : " + error.message });
+  }
+});
+
+function sourceYoutubeDescription(source) {
+  return [
+    "Source : " + source.provider,
+    "Fiche originale : " + source.itemUrl,
+    "Licence déclarée : " + source.license + (source.licenseUrl ? " — " + source.licenseUrl : ""),
+    source.attribution ? "Attribution : " + source.attribution : "",
+    source.description || ""
+  ].filter(Boolean).join("\n\n").slice(0, 5000);
+}
+
+app.post("/api/sources/open/import", requireAdmin, async (req, res) => {
+  let tempFile = null;
+  try {
+    if (req.body?.rightsConfirmed !== true)
+      return res.status(400).json({ error: "Confirmez que vous avez vérifié la licence et les éventuels droits sur les images, musiques et personnes." });
+    const provider = String(req.body.provider || "");
+    const providerKey = String(req.body.providerKey || "");
+    const fileName = req.body.fileName ? String(req.body.fileName) : null;
+    const tokens = req.session.youtubeTokens || await loadPersistentYoutubeTokens();
+    if (!tokens) return res.status(401).json({ error: "Connectez d'abord la chaîne YouTube à CINEMA AUTO." });
+    tempFile = path.join(uploadDir, "open-" + crypto.randomBytes(16).toString("hex") + ".video");
+    const source = await downloadOpenVideo(provider, providerKey, fileName, tempFile);
+    const client = createOAuthClient();
+    if (!client) return res.status(503).json({ error: "Google OAuth n'est pas configuré dans Render." });
+    client.setCredentials(tokens);
+    client.on("tokens", updated => savePersistentYoutubeTokens(updated).catch(err => console.error("Token refresh save failed:", err.message)));
+    const youtube = google.youtube({ version: "v3", auth: client });
+    const title = String(source.title || "Film libre de droits").trim().slice(0, 100);
+    const description = sourceYoutubeDescription(source);
+    const result = await youtube.videos.insert({
+      part: ["snippet", "status"],
+      requestBody: { snippet: { title, description, categoryId: "1" }, status: { privacyStatus: "private", selfDeclaredMadeForKids: false } },
+      media: { body: fs.createReadStream(tempFile) }
+    });
+    if (pool && result.data.id) {
+      await pool.query(
+        "INSERT INTO video_uploads (video_id,title,description,category,publish_at,status) VALUES ($1,$2,$3,'film',NULL,'uploaded-private')",
+        [result.data.id, title, description]
+      );
+    }
+    res.json({ ok: true, title, videoId: result.data.id, url: "https://www.youtube.com/watch?v=" + result.data.id, privacyStatus: "private", license: source.license });
+  } catch (error) {
+    console.error("Open source import:", error.message);
+    res.status(500).json({ error: "Téléchargement ou envoi impossible : " + String(error.message).slice(0, 400) });
+  } finally {
+    if (tempFile && fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+  }
+});
+
+app.get("/api/sources/auto/status", requireAdmin, async (_req, res) => {
+  if (!pool) return res.status(503).json({ error: "La base de données est nécessaire pour la file automatique." });
+  try {
+    await ensureSchema();
+    const [cfg, counts, tokens] = await Promise.all([
+      pool.query("SELECT enabled, rights_policy_confirmed, queries, last_scan_at, last_error FROM source_auto_config WHERE id=1"),
+      pool.query("SELECT status, COUNT(*)::int AS count FROM source_jobs GROUP BY status"),
+      loadPersistentYoutubeTokens()
+    ]);
+    res.json({
+      ...(cfg.rows[0] || {}),
+      counts: Object.fromEntries(counts.rows.map(row => [row.status, row.count])),
+      youtubeReady: Boolean(tokens?.refresh_token || tokens?.access_token),
+      workerMode: "process-interval"
+    });
+  } catch (error) { res.status(500).json({ error: "État de l'automatisation indisponible : " + error.message }); }
+});
+
+app.post("/api/sources/auto/config", requireAdmin, async (req, res) => {
+  if (!pool) return res.status(503).json({ error: "La base de données est nécessaire pour l'automatisation." });
+  try {
+    await ensureSchema();
+    const enabled = req.body?.enabled === true;
+    const rightsConfirmed = req.body?.rightsPolicyConfirmed === true;
+    const queries = Array.isArray(req.body?.queries)
+      ? [...new Set(req.body.queries.map(value => String(value || "").trim().slice(0, 80)).filter(value => value.length >= 2))].slice(0, 4)
+      : [];
+    if (enabled && !rightsConfirmed) return res.status(400).json({ error: "Confirmez la politique de sources et de licences avant d'activer l'envoi automatique." });
+    if (enabled && !queries.length) return res.status(400).json({ error: "Ajoutez au moins un terme de recherche." });
+    const tokens = await loadPersistentYoutubeTokens();
+    if (enabled && !tokens) return res.status(409).json({ error: "Connectez d'abord YouTube en cliquant sur « Connecter YouTube », puis activez l'automatisation." });
+    const updated = await pool.query(
+      "UPDATE source_auto_config SET enabled=$1, rights_policy_confirmed=$2, queries=$3, last_error=NULL, updated_at=NOW() WHERE id=1 RETURNING enabled, rights_policy_confirmed, queries, last_scan_at",
+      [enabled, rightsConfirmed, queries]
+    );
+    res.json({ ok: true, ...updated.rows[0] });
+    if (enabled) setTimeout(() => runAutoSourcePipeline().catch(err => console.error("Initial auto source run:", err.message)), 1000);
+  } catch (error) { res.status(500).json({ error: "Configuration automatique impossible : " + error.message }); }
+});
+
+let autoPipelineRunning = false;
+async function runAutoSourcePipeline() {
+  if (!pool || autoPipelineRunning) return;
+  autoPipelineRunning = true;
+  try {
+    await ensureSchema();
+    const configResult = await pool.query("SELECT * FROM source_auto_config WHERE id=1");
+    const config = configResult.rows[0];
+    if (!config?.enabled || !config.rights_policy_confirmed) return;
+    const tokens = await loadPersistentYoutubeTokens();
+    if (!tokens) throw new Error("Connexion YouTube persistante manquante.");
+    const oauth = createOAuthClient();
+    if (!oauth) throw new Error("Google OAuth n'est pas configuré.");
+    oauth.setCredentials(tokens);
+    oauth.on("tokens", updated => savePersistentYoutubeTokens(updated).catch(err => console.error("Auto token refresh:", err.message)));
+
+    const discovered = [];
+    for (const query of (config.queries || []).slice(0, 4)) {
+      const result = await searchOpenSources(query);
+      discovered.push(...result.sources);
+    }
+    const unique = [...new Map(discovered.map(source => [source.id, source])).values()].slice(0, 24);
+    for (const source of unique) {
+      await pool.query(
+        \`INSERT INTO source_jobs (source_key,provider,provider_key,file_name,title,description,license,license_url,attribution,item_url)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (source_key) DO NOTHING\`,
+        [source.id, source.provider, source.providerKey, source.fileName || null, source.title,
+         source.description || "", source.license, source.licenseUrl || "", source.attribution || "", source.itemUrl]
+      );
+    }
+    await pool.query("UPDATE source_auto_config SET last_scan_at=NOW(), last_error=NULL WHERE id=1");
+
+    // Upload sequentially: each next film starts only after the previous upload finishes.
+    for (let index = 0; index < 2; index++) {
+      const claimed = await pool.query(
+        \`UPDATE source_jobs SET status='downloading', attempts=attempts+1, updated_at=NOW()
+         WHERE id=(SELECT id FROM source_jobs WHERE status='pending' AND attempts<3 ORDER BY created_at ASC FOR UPDATE SKIP LOCKED LIMIT 1)
+         RETURNING *\`
+      );
+      const job = claimed.rows[0];
+      if (!job) break;
+      let tempFile = null;
+      try {
+        tempFile = path.join(uploadDir, "auto-" + crypto.randomBytes(16).toString("hex") + ".video");
+        const source = await downloadOpenVideo(job.provider, job.provider_key, job.file_name, tempFile);
+        const youtube = google.youtube({ version: "v3", auth: oauth });
+        const description = sourceYoutubeDescription(source);
+        const title = String(source.title || job.title).trim().slice(0, 100);
+        const uploaded = await youtube.videos.insert({
+          part: ["snippet", "status"],
+          requestBody: { snippet: { title, description, categoryId: "1" }, status: { privacyStatus: "private", selfDeclaredMadeForKids: false } },
+          media: { body: fs.createReadStream(tempFile) }
+        });
+        if (pool && uploaded.data.id) {
+          await pool.query(
+            "INSERT INTO video_uploads (video_id,title,description,category,publish_at,status) VALUES ($1,$2,$3,'film',NULL,'uploaded-private')",
+            [uploaded.data.id, title, description]
+          );
+        }
+        await pool.query(
+          "UPDATE source_jobs SET status='uploaded-private', video_id=$1, last_error=NULL, updated_at=NOW() WHERE id=$2",
+          [uploaded.data.id, job.id]
+        );
+      } catch (error) {
+        const retryStatus = Number(job.attempts || 0) + 1 >= 3 ? "failed" : "pending";
+        await pool.query(
+          "UPDATE source_jobs SET status=$1, last_error=$2, updated_at=NOW() WHERE id=$3",
+          [retryStatus, String(error.message || error).slice(0, 500), job.id]
+        );
+      } finally {
+        if (tempFile && fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+      }
+    }
+  } catch (error) {
+    console.error("Automatic source pipeline:", error.message);
+    if (pool) await pool.query("UPDATE source_auto_config SET last_error=$1 WHERE id=1", [String(error.message).slice(0, 500)]).catch(() => {});
+  } finally {
+    autoPipelineRunning = false;
+  }
+}
+
+
 require("./metricool")(app, { requireAdmin, upload, pool });
 
 app.use((error, _req, res, _next) => {
@@ -366,4 +628,9 @@ app.use((error, _req, res, _next) => {
   res.status(400).json({ error: error.message || "Requête invalide." });
 });
 
-app.listen(PORT, "0.0.0.0", () => console.log("CINEMA AUTO écoute sur le port " + PORT));
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("CINEMA AUTO écoute sur le port " + PORT);
+  // Le worker recherche les sources à intervalles réguliers tant que l'instance Render est active.
+  setTimeout(() => runAutoSourcePipeline().catch(err => console.error("Auto source startup:", err.message)), 45000);
+  setInterval(() => runAutoSourcePipeline().catch(err => console.error("Auto source interval:", err.message)), 10 * 60 * 1000);
+});
