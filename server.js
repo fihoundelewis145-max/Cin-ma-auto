@@ -167,6 +167,9 @@ async function ensureSchema() {
   if (String(process.env.AUTO_SEARCH_ENABLED || "").toLowerCase() === "true") {
     await pool.query("UPDATE source_auto_config SET enabled=TRUE, updated_at=NOW() WHERE id=1");
   }
+  // Legacy UI flag: enabled automatically because the worker enforces a strict CC0/Public-Domain-Mark whitelist.
+  // This is a technical source filter, not a claim that every third-party element has been independently cleared.
+  await pool.query("UPDATE source_auto_config SET rights_policy_confirmed=TRUE WHERE id=1");
   await pool.query(`CREATE TABLE IF NOT EXISTS source_jobs (
     id BIGSERIAL PRIMARY KEY,
     source_key TEXT UNIQUE NOT NULL,
@@ -523,6 +526,7 @@ app.get("/api/sources/auto/status", requireAdmin, async (_req, res) => {
       ...(cfg.rows[0] || {}),
       counts: Object.fromEntries(counts.rows.map(row => [row.status, row.count])),
       youtubeReady: Boolean(tokens?.refresh_token || tokens?.access_token),
+      rightsPolicyMode: "automatic-strict-cc0-or-official-public-domain-mark",
       workerMode: "process-interval"
     });
   } catch (error) { res.status(500).json({ error: "État de l'automatisation indisponible : " + error.message }); }
@@ -533,16 +537,15 @@ app.post("/api/sources/auto/config", requireAdmin, async (req, res) => {
   try {
     await ensureSchema();
     const enabled = req.body?.enabled === true;
-    const rightsConfirmed = req.body?.rightsPolicyConfirmed === true;
     const queries = Array.isArray(req.body?.queries)
       ? [...new Set(req.body.queries.map(value => String(value || "").trim().slice(0, 80)).filter(value => value.length >= 2))].slice(0, 4)
       : [];
-    // Searching public catalog metadata is independent of YouTube and redistribution rights.
-    // rights_policy_confirmed gates only automatic downloading and uploading.
+    // No manual legal checkbox: automatic imports are restricted by media-sources.js to
+    // explicit CC0 / official Creative Commons Public Domain Mark metadata.
     if (enabled && !queries.length) return res.status(400).json({ error: "Ajoutez au moins un terme de recherche." });
     const updated = await pool.query(
-      "UPDATE source_auto_config SET enabled=$1, rights_policy_confirmed=$2, queries=$3, last_error=NULL, updated_at=NOW() WHERE id=1 RETURNING enabled, rights_policy_confirmed, queries, last_scan_at",
-      [enabled, rightsConfirmed, queries]
+      "UPDATE source_auto_config SET enabled=$1, rights_policy_confirmed=TRUE, queries=$2, last_error=NULL, updated_at=NOW() WHERE id=1 RETURNING enabled, rights_policy_confirmed, queries, last_scan_at",
+      [enabled, queries]
     );
     res.json({ ok: true, ...updated.rows[0] });
     if (enabled) setTimeout(() => runAutoSourcePipeline().catch(err => console.error("Initial auto source run:", err.message)), 1000);
@@ -577,13 +580,8 @@ async function runAutoSourcePipeline() {
     }
     await pool.query("UPDATE source_auto_config SET last_scan_at=NOW(), last_error=NULL WHERE id=1");
 
-    // Search results remain queued until the user has explicitly confirmed the rights policy
-    // and a persistent YouTube OAuth connection is available.
-    if (!config.rights_policy_confirmed) {
-      await pool.query("UPDATE source_auto_config SET last_error=$1 WHERE id=1",
-        ["Recherche active. Envoi automatique en attente de la confirmation de la politique des droits."]);
-      return;
-    }
+    // The source parser enforces the automatic CC0/Public-Domain-Mark whitelist.
+    // YouTube authorization is still required before any upload can begin.
     const tokens = await loadPersistentYoutubeTokens();
     if (!tokens) {
       await pool.query("UPDATE source_auto_config SET last_error=$1 WHERE id=1",
