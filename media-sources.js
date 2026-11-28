@@ -91,7 +91,7 @@ async function searchInternetArchive(query, limit = 8) {
       const metadata = await fetchJson("https://archive.org/metadata/" + encodeURIComponent(identifier));
       const license = licenseFromArchive(metadata?.metadata || {});
       if (!license) return null;
-      const files = (metadata.files || []).filter(safeFile).sort((a, b) => Number(a.size) - Number(b.size));
+      const files = (metadata.files || []).filter(safeFile).sort((a, b) => Number(b.size) - Number(a.size));
       const file = files[0];
       if (!file) return null;
       return {
