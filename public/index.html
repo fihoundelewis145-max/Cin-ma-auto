@@ -17,6 +17,7 @@ main{padding:34px;max-width:1450px;width:100%;margin:auto}.top{display:flex;alig
 .btn.secondary{background:#242b38;border:1px solid var(--line)}.btn:disabled{opacity:.5;cursor:not-allowed}.field{width:100%;background:#0d1118;color:white;border:1px solid var(--line);padding:12px;border-radius:9px;font:inherit}
 form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1.6}.check{display:flex;gap:9px;align-items:flex-start;font-size:12px;color:#cbd2df}
 .notice{padding:13px;border-radius:10px;background:#241c14;color:var(--amber);font-size:12px;line-height:1.5}.good{color:var(--green)}.bad{color:#ff7b89}.hidden{display:none!important}
+.integration{display:grid;gap:10px}.integration-head{display:flex;align-items:center;gap:12px}.integration-head strong{display:block;font-size:14px}.integration-head small{display:block;margin-top:3px;font-size:12px;color:var(--muted)}.integration-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-weight:900}.integration-icon.youtube{background:#3b1119;color:#ff5868}.integration-icon.vidiq{background:#092c2a;color:#53ddbb;font-size:24px}.integration-divider{height:1px;background:var(--line);margin:18px 0}.vidiq-steps{padding-left:20px;color:#cbd2df;font-size:13px;line-height:1.65;margin:0}.vidiq-steps li{padding-left:3px;margin:4px 0}.help-link{font-size:12px;color:#9eacff;text-decoration:none}.help-link:hover{text-decoration:underline}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}.tab{padding:9px 13px;border:1px solid var(--line);border-radius:99px;color:#cbd2df;text-decoration:none;font-size:13px}
 .table{width:100%;border-collapse:collapse;font-size:13px}.table td,.table th{padding:11px;border-bottom:1px solid var(--line);text-align:left}.table th{color:var(--muted);font-weight:600}.scroll{overflow:auto}
 @media(max-width:850px){.shell{grid-template-columns:1fr}.side{padding:17px;border-right:0;border-bottom:1px solid var(--line)}.tag{margin:5px 0 12px}nav{display:flex;overflow:auto}nav a{white-space:nowrap}main{padding:22px 16px}.grid,.wide{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}}
@@ -39,7 +40,31 @@ form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1
 <label class="check"><input type="checkbox" name="rightsConfirmed" required><span>Je confirme que je possède les droits nécessaires pour publier cette vidéo sur YouTube.</span></label>
 <button class="btn" id="send">Envoyer sur YouTube</button><div class="hint" id="message">La vidéo sera envoyée en privé. Une date future permet de programmer sa publication publique.</div>
 </form></section>
-<section class="card" id="connection"><h2>Connexion YouTube</h2><p class="muted">Autorisez votre chaîne via Google OAuth officiel.</p><a class="btn" id="connectButton" href="/auth/youtube">Connecter YouTube</a><p class="hint" id="oauthHint">Vérification de la configuration Google…</p><div class="notice">Ce studio gère les contenus que vous êtes autorisé à redistribuer. Il ne contourne pas les protections de MovieBox et ne récupère pas automatiquement des films commerciaux protégés.</div><p><button class="btn secondary" id="logout">Se déconnecter</button></p></section></div>
+<section class="card" id="connection">
+<h2>Connexions des chaînes</h2>
+<div class="integration">
+  <div class="integration-head"><span class="integration-icon youtube">▶</span><div><strong>YouTube — connexion à CINEMA AUTO</strong><small>Autorisation de téléverser et programmer les vidéos</small></div></div>
+  <p class="muted">Reliez la chaîne que CINEMA AUTO utilisera pour ses publications. Cette autorisation passe par Google OAuth officiel.</p>
+  <a class="btn" id="connectButton" href="/auth/youtube">Connecter ma chaîne à CINEMA AUTO</a>
+  <p class="hint" id="oauthHint">Vérification de la configuration Google…</p>
+</div>
+<div class="integration-divider"></div>
+<div class="integration">
+  <div class="integration-head"><span class="integration-icon vidiq">v</span><div><strong>vidIQ — liaison de la chaîne</strong><small>Analyses, SEO et optimisation YouTube</small></div></div>
+  <p class="muted">Reliez aussi cette chaîne à votre compte vidIQ pour profiter de ses analyses et outils de croissance.</p>
+  <ol class="vidiq-steps">
+    <li>Ouvrez vidIQ avec le bouton ci-dessous et connectez-vous à votre compte.</li>
+    <li>Dans vidIQ, ouvrez votre profil puis choisissez <strong>Link your channel</strong>.</li>
+    <li>Connectez le compte Google qui gère la chaîne et acceptez les autorisations demandées.</li>
+    <li>Revenez ensuite dans CINEMA AUTO. La liaison vidIQ est gérée dans votre compte vidIQ.</li>
+  </ol>
+  <a class="btn secondary" href="https://app.vidiq.com/" target="_blank" rel="noopener noreferrer">Ouvrir vidIQ et relier ma chaîne ↗</a>
+  <p class="hint">La connexion vidIQ sert à ses analyses et outils. Elle ne remplace pas l'autorisation YouTube de CINEMA AUTO ci-dessus et ne donne pas automatiquement au site accès aux données privées vidIQ.</p>
+  <a class="help-link" href="https://support.vidiq.com/en/articles/7988664-authenticating-your-channel-with-vidiq" target="_blank" rel="noopener noreferrer">Consulter le guide officiel de liaison vidIQ</a>
+</div>
+<div class="notice">Important : CINEMA AUTO et vidIQ demandent deux autorisations distinctes. Les vidéos téléversées par CINEMA AUTO doivent être des contenus que vous êtes autorisé à redistribuer.</div>
+<p><button class="btn secondary" id="logout">Se déconnecter</button></p>
+</section></div>
 <section class="card section" id="library"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><h2>Bibliothèque et historique</h2><button class="btn secondary" id="reloadUploads">Actualiser</button></div><div class="scroll"><table class="table"><thead><tr><th>Titre</th><th>Type</th><th>Publication</th><th>État</th><th>YouTube</th></tr></thead><tbody id="uploadRows"><tr><td colspan="5" class="hint">Aucune vidéo importée.</td></tr></tbody></table></div></section>
 <section class="card section" id="settings"><h2>Configuration du service</h2><div class="hint" id="configList">Chargement…</div></section></div>
 <p class="hint">Les programmes YouTube sont publiés par YouTube à l'heure prévue. Les jetons OAuth et les sessions nécessitent un stockage persistant. Pour les gros fichiers, ajoutez un stockage objet ou disque persistant.</p></main></div>
