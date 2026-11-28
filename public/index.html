@@ -50,7 +50,7 @@ public domain short film</textarea>
   <div class="hint" id="openSourceSearchStatus">Les résultats sans licence admise ou sans fichier vidéo compatible sont exclus.</div>
  </form>
  <div id="openSourceResults" class="section"></div>
- <divider></divider>
+ <hr>
  <h3>Library of Congress — National Screening Room</h3>
  <p class="hint">Catalogue d'archives supplémentaire. Les vidéos de cette source restent soumises à une vérification des droits titre par titre.</p>
  <form id="sourceSearchForm">
@@ -178,6 +178,7 @@ async function searchOpenMedia(q){
   const r=await fetch('/api/sources/open/search?q='+encodeURIComponent(q));const d=await r.json();
   if(!r.ok)throw Error(d.error||'Recherche impossible.');
   status.textContent=(d.notice||'Résultats chargés')+' · Internet Archive : '+d.providers.internetArchive+' · Wikimedia Commons : '+d.providers.wikimediaCommons;
+  box.dataset.loaded='true';
   box.innerHTML=(d.sources||[]).map((v,i)=>'<article class="card" style="margin-top:10px"><strong>'+escapeHtml(v.title)+'</strong><p class="hint">'+escapeHtml(v.provider)+' · '+escapeHtml(v.year||v.format)+' · '+(v.sizeBytes?Math.round(v.sizeBytes/1048576)+' Mo':'taille inconnue')+'</p><p class="hint">'+escapeHtml(v.description||'')+'</p><p class="hint">Licence : <strong>'+escapeHtml(v.license)+'</strong> · '+escapeHtml(v.attribution||'Attribution non indiquée')+'</p><a class="help-link" href="'+escapeHtml(v.itemUrl)+'" target="_blank" rel="noopener noreferrer">Consulter la fiche source ↗</a><label class="check"><input type="checkbox" id="openRights'+i+'"><span>J’ai vérifié la fiche, la licence et les droits tiers ; je peux redistribuer cette vidéo.</span></label><button class="btn" type="button" data-provider="'+escapeHtml(v.provider)+'" data-provider-key="'+escapeHtml(v.providerKey)+'" data-file-name="'+escapeHtml(v.fileName||'')+'" data-index="'+i+'">Télécharger et envoyer immédiatement vers YouTube</button></article>').join('')||'<p class="hint">Aucun fichier vidéo admissible trouvé. Essaie un autre titre ou thème.</p>';
   box.querySelectorAll('[data-provider]').forEach(btn=>btn.addEventListener('click',()=>importOpenSource(btn)));
  }catch(err){status.textContent=err.message}
