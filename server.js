@@ -321,6 +321,13 @@ app.post("/api/sources/loc/import", requireAdmin, async (req, res) => {
     const client = createOAuthClient();
     if (!client) throw new Error("Google OAuth n'est pas configuré dans Render.");
     client.setCredentials(tokens);
+    let publishAt = null;
+    if (req.body.publishAt) {
+      const scheduled = new Date(req.body.publishAt);
+      if (!Number.isFinite(scheduled.getTime()) || scheduled.getTime() < Date.now() + 2 * 60 * 1000)
+        throw new Error("Choisissez une date future, au moins deux minutes à l’avance.");
+      publishAt = scheduled.toISOString();
+    }
     const title = String(item.title || metadata.title || "Film du catalogue Library of Congress").trim().slice(0, 100);
     const description = [
       "Source : Library of Congress — National Screening Room",
@@ -333,17 +340,17 @@ app.post("/api/sources/loc/import", requireAdmin, async (req, res) => {
       part: ["snippet", "status"],
       requestBody: {
         snippet: { title, description, categoryId: "1" },
-        status: { privacyStatus: "private", selfDeclaredMadeForKids: false }
+        status: { privacyStatus: "private", selfDeclaredMadeForKids: false, ...(publishAt ? { publishAt } : {}) }
       },
       media: { body: fs.createReadStream(tempFile) }
     });
     if (pool && result.data.id) {
       await pool.query(
-        "INSERT INTO video_uploads (video_id,title,description,category,status) VALUES ($1,$2,$3,$4,$5)",
-        [result.data.id, title, description, "film", "uploaded-private"]
+        "INSERT INTO video_uploads (video_id,title,description,category,publish_at,status) VALUES ($1,$2,$3,$4,$5,$6)",
+        [result.data.id, title, description, "film", publishAt, publishAt ? "scheduled" : "uploaded-private"]
       );
     }
-    res.json({ ok: true, title, videoId: result.data.id, url: "https://www.youtube.com/watch?v=" + result.data.id, privacyStatus: "private" });
+    res.json({ ok: true, title, videoId: result.data.id, url: "https://www.youtube.com/watch?v=" + result.data.id, privacyStatus: "private", publishAt });
   } catch (error) {
     console.error("Library of Congress import:", error.message);
     res.status(500).json({ error: "Import impossible : " + String(error.message).slice(0, 400) });
