@@ -32,10 +32,10 @@ form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1
 <div class="tabs section"><a class="tab" href="#library">Bibliothèque & historique</a><a class="tab" href="#upload">Nouvelle publication</a><a class="tab" href="#connection">Connecter YouTube</a></div><div class="card section" id="sources">
  <h2>Sources de films et séries</h2>
  <p class="muted">CINEMA AUTO recherche des films et épisodes longs dans les archives ouvertes, télécharge les médias réutilisables et les envoie sur YouTube dès qu'ils sont prêts.</p>
- <div class="notice">La recherche automatique n'envoie sans intervention que les fichiers explicitement indiqués comme domaine public ou CC0. Les licences CC BY et CC BY-SA restent accessibles à l'import manuel après vérification des conditions. Les mentions machine-readable ne remplacent pas une vérification des droits sur les musiques, images, interprétations, marques et autres éléments du film. Seules les vidéos dont la durée réelle dépasse strictement 60 minutes sont acceptées. Les vidéos sont envoyées immédiatement en mode privé.</div>
+ <div class="notice">La recherche automatique fonctionne sans connexion YouTube et conserve les résultats dans la file. Le téléchargement et l'envoi sans intervention sont activés séparément et nécessitent une confirmation des droits et une connexion YouTube. Les licences CC BY et CC BY-SA restent accessibles à l'import manuel après vérification des conditions. Les mentions machine-readable ne remplacent pas une vérification des droits sur les musiques, images, interprétations, marques et autres éléments du film. Seules les vidéos dont la durée réelle dépasse strictement 60 minutes sont acceptées. Les vidéos sont envoyées immédiatement en mode privé.</div>
  <div class="card" style="margin:14px 0">
   <h3>Automatisation des sources</h3>
-  <label class="check"><input id="autoSourceEnabled" type="checkbox"><span>Activer la recherche, le téléchargement et l'envoi automatiques</span></label>
+  <label class="check"><input id="autoSourceEnabled" type="checkbox"><span>Activer la recherche automatique en arrière-plan</span></label>
   <label class="hint" for="autoSourceQueries">Termes de recherche (un par ligne, quatre maximum)</label>
   <textarea class="field" id="autoSourceQueries" rows="3">feature film
 feature-length movie
