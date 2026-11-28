@@ -40,3 +40,15 @@ Node.js 20+, `npm install`, variables dans `.env`, puis `npm start`.
 - Les sessions et jetons OAuth sont désormais stockés dans PostgreSQL si `DATABASE_URL` est reliée.
 - La file d'importation automatique depuis des sites tiers n'est pas incluse ; seules les sources autorisées peuvent être automatisées.
 - Les vidéos sont programmées via l'API YouTube avec visibilité privée jusqu'à l'heure prévue.
+
+
+## Liaison de la chaîne à vidIQ depuis CINEMA AUTO
+Le tableau de bord contient maintenant un bouton **Ouvrir vidIQ et relier ma chaîne**. Il ouvre le site officiel vidIQ. Dans vidIQ :
+1. Connectez-vous à votre compte.
+2. Ouvrez l'icône de profil, puis **Link your channel**.
+3. Choisissez le compte Google propriétaire ou gestionnaire de la chaîne et acceptez les autorisations.
+4. Revenez à CINEMA AUTO.
+
+Guide officiel : https://support.vidiq.com/en/articles/7988664-authenticating-your-channel-with-vidiq
+
+La liaison vidIQ et l'autorisation Google OAuth de CINEMA AUTO sont distinctes. Le fait de relier une chaîne à vidIQ n'accorde pas automatiquement au backend CINEMA AUTO le droit de téléverser sur YouTube et ne donne pas automatiquement au site accès aux données privées vidIQ. Pour publier depuis CINEMA AUTO, la connexion Google OAuth du site reste nécessaire.
