@@ -56,6 +56,19 @@ function licenseFromCommons(ext) {
   return { label, url, autoEligible: /^(?:public domain|cc0)$/i.test(label) };
 }
 
+function parseDurationSeconds(value) {
+  if (Array.isArray(value)) value = value[0];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (/^\d+(?:\.\d+)?$/.test(raw)) return Number(raw);
+  const parts = raw.split(":").map(Number);
+  if (parts.some(part => !Number.isFinite(part) || part < 0) || parts.length > 3) return null;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return null;
+}
+
 function safeFile(file) {
   const name = String(file?.name || "");
   const ext = path.extname(name).toLowerCase();
@@ -78,7 +91,7 @@ async function searchInternetArchive(query, limit = 8) {
   if (q.length < 2) return [];
   const searchUrl = new URL("https://archive.org/advancedsearch.php");
   searchUrl.searchParams.set("q", 'mediatype:movies AND title:("' + q + '")');
-  for (const field of ["identifier", "title", "year", "description"]) searchUrl.searchParams.append("fl[]", field);
+  for (const field of ["identifier", "title", "year", "description", "runtime"]) searchUrl.searchParams.append("fl[]", field);
   searchUrl.searchParams.set("rows", String(Math.min(Math.max(limit, 1), 10)));
   searchUrl.searchParams.set("output", "json");
   const data = await fetchJson(searchUrl);
@@ -94,6 +107,7 @@ async function searchInternetArchive(query, limit = 8) {
       const files = (metadata.files || []).filter(safeFile).sort((a, b) => Number(b.size) - Number(a.size));
       const file = files[0];
       if (!file) return null;
+      const durationSeconds = parseDurationSeconds(metadata.metadata?.runtime) ?? parseDurationSeconds(file.length);
       return {
         id: "ia:" + identifier + ":" + file.name,
         provider: "Internet Archive",
@@ -102,6 +116,7 @@ async function searchInternetArchive(query, limit = 8) {
         title: cleanText(doc.title || metadata.metadata?.title || identifier),
         year: String(doc.year || ""),
         description: cleanText(doc.description || metadata.metadata?.description || "").slice(0, 600),
+        durationSeconds,
         license: license.label,
         licenseUrl: license.url,
         attribution: cleanText(metadata.metadata?.creator || metadata.metadata?.publisher || ""),
@@ -137,6 +152,7 @@ async function searchWikimediaCommons(query, limit = 8) {
     const title = String(page.title || "");
     const ext = path.extname(title).toLowerCase();
     const license = licenseFromCommons(info?.extmetadata || {});
+    const durationSeconds = parseDurationSeconds(info?.duration) ?? parseDurationSeconds(info?.extmetadata?.Duration?.value);
     const size = Number(info?.size || 0);
     if (!info?.url || !license || ![".webm", ".mpg", ".mpeg"].includes(ext) || !size || size > MAX_BYTES) return null;
     const mediaUrl = new URL(info.url);
@@ -149,6 +165,7 @@ async function searchWikimediaCommons(query, limit = 8) {
       title: cleanText(title.replace(/^File:/, "").replace(/\.[^.]+$/, "")),
       year: "",
       description: cleanText(meta.ImageDescription?.value || "").slice(0, 600),
+      durationSeconds,
       license: license.label,
       licenseUrl: license.url,
       attribution: cleanText(meta.Artist?.value || ""),
@@ -183,6 +200,8 @@ async function getOpenVideoSource(provider, providerKey, fileName) {
     if (!license) throw new Error("La licence Internet Archive n'est pas explicitement réutilisable. Import bloqué.");
     const file = (metadata.files || []).find(item => item.name === fileName && safeFile(item));
     if (!file) throw new Error("Le fichier vidéo n'est plus disponible ou dépasse la limite autorisée.");
+    const durationSeconds = parseDurationSeconds(metadata.metadata?.runtime) ?? parseDurationSeconds(file.length);
+    if (durationSeconds !== null && durationSeconds <= 3600) throw new Error("Vidéo écartée : durée inférieure ou égale à 1 heure.");
     return {
       url: "https://archive.org/download/" + encodeURIComponent(providerKey) + "/" + encodeURIComponent(file.name),
       title: cleanText(metadata.metadata?.title || providerKey),
@@ -191,6 +210,7 @@ async function getOpenVideoSource(provider, providerKey, fileName) {
       attribution: cleanText(metadata.metadata?.creator || metadata.metadata?.publisher || ""),
       itemUrl: "https://archive.org/details/" + encodeURIComponent(providerKey),
       size: Number(file.size),
+      durationSeconds,
       extension: path.extname(file.name).toLowerCase(),
       autoEligible: license.autoEligible
     };
@@ -210,6 +230,8 @@ async function getOpenVideoSource(provider, providerKey, fileName) {
     const info = page?.imageinfo?.[0];
     const license = licenseFromCommons(info?.extmetadata || {});
     if (!info?.url || !license) throw new Error("Licence Wikimedia absente ou non admise. Import bloqué.");
+    const durationSeconds = parseDurationSeconds(info?.duration) ?? parseDurationSeconds(info?.extmetadata?.Duration?.value);
+    if (durationSeconds !== null && durationSeconds <= 3600) throw new Error("Vidéo écartée : durée inférieure ou égale à 1 heure.");
     const mediaUrl = new URL(info.url);
     if (mediaUrl.protocol !== "https:" || mediaUrl.hostname !== "upload.wikimedia.org") throw new Error("Hôte média Wikimedia non autorisé.");
     const size = Number(info.size || 0);
@@ -222,6 +244,7 @@ async function getOpenVideoSource(provider, providerKey, fileName) {
       attribution: cleanText(info.extmetadata?.Artist?.value || ""),
       itemUrl: "https://commons.wikimedia.org/wiki/" + encodeURIComponent(title.replace(/ /g, "_")),
       size,
+      durationSeconds,
       extension: path.extname(title).toLowerCase(),
       autoEligible: license.autoEligible
     };
@@ -255,4 +278,4 @@ async function downloadOpenVideo(provider, providerKey, fileName, destination) {
   return { ...source, size: actualSize };
 }
 
-module.exports = { searchOpenSources, downloadOpenVideo, MAX_BYTES };
+module.exports = { searchOpenSources, downloadOpenVideo, MAX_BYTES, parseDurationSeconds };
