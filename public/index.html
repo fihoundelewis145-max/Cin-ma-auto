@@ -31,13 +31,32 @@ form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1
 <div class="grid"><div class="card"><small>Vidéos gérées</small><div class="metric" id="totalVideos">0</div><small>Enregistrées dans la bibliothèque</small></div><div class="card"><small>Chaîne YouTube</small><div class="metric" id="ytStatus">Non liée</div><small id="ytSub">Connexion Google OAuth requise</small></div><div class="card"><small>Base de données</small><div class="metric" id="dbStatus">—</div><small>Historique et sessions persistants</small></div></div>
 <div class="tabs section"><a class="tab" href="#library">Bibliothèque & historique</a><a class="tab" href="#upload">Nouvelle publication</a><a class="tab" href="#connection">Connecter YouTube</a></div><div class="card section" id="sources">
  <h2>Sources de films et séries</h2>
- <p class="muted">Catalogue de la Library of Congress : recherche de films numérisés et import direct vers ta chaîne YouTube.</p>
- <div class="notice">Attention : tous les films du catalogue ne sont pas libres de republication. Vérifie les droits de chaque titre. Les mentions de copyright explicites sont bloquées automatiquement. N'importe que les œuvres dont tu as le droit de redistribution.</div>
+ <p class="muted">CINEMA AUTO peut rechercher dans plusieurs archives ouvertes, télécharger les fichiers réutilisables et les envoyer sur YouTube dès que chaque fichier est prêt.</p>
+ <div class="notice">La recherche automatique n'utilise que les fichiers dont les métadonnées indiquent une licence admise (domaine public, CC0, CC BY ou CC BY-SA). Les mentions machine-readable ne remplacent pas une vérification des droits sur les musiques, images, interprétations, marques et autres éléments du film. Les vidéos sont envoyées immédiatement en mode privé.</div>
+ <div class="card" style="margin:14px 0">
+  <h3>Automatisation des sources</h3>
+  <label class="check"><input id="autoSourceEnabled" type="checkbox"><span>Activer la recherche, le téléchargement et l'envoi automatiques</span></label>
+  <label class="hint" for="autoSourceQueries">Termes de recherche (un par ligne, quatre maximum)</label>
+  <textarea class="field" id="autoSourceQueries" rows="3">silent film
+public domain short film</textarea>
+  <label class="check"><input id="autoRightsConfirm" type="checkbox"><span>Je confirme que CINEMA AUTO doit retenir uniquement les licences affichées comme domaine public, CC0, CC BY ou CC BY-SA, et que je vérifierai les droits tiers avant toute diffusion publique.</span></label>
+  <button class="btn" type="button" id="saveAutoSources">Enregistrer l'automatisation</button>
+  <p class="hint" id="autoSourceStatus">Vérification de l'automatisation…</p>
+ </div>
+ <form id="openSourceSearchForm">
+  <h3>Archives ouvertes : Internet Archive et Wikimedia Commons</h3>
+  <input class="field" id="openSourceQuery" value="silent film" placeholder="Rechercher un titre, un thème ou un réalisateur…" required>
+  <button class="btn secondary" id="openSourceSearchButton">Rechercher dans les archives ouvertes</button>
+  <div class="hint" id="openSourceSearchStatus">Les résultats sans licence admise ou sans fichier vidéo compatible sont exclus.</div>
+ </form>
+ <div id="openSourceResults" class="section"></div>
+ <divider></divider>
+ <h3>Library of Congress — National Screening Room</h3>
+ <p class="hint">Catalogue d'archives supplémentaire. Les vidéos de cette source restent soumises à une vérification des droits titre par titre.</p>
  <form id="sourceSearchForm">
-  <input class="field" id="sourceQuery" name="q" value="silent film" placeholder="Rechercher un film, un thème, un titre…" required>
-  <label class="hint">Date de publication YouTube (facultatif — laisser vide pour envoyer en privé)</label><input class="field" id="sourcePublishAt" type="datetime-local">
-  <button class="btn secondary" id="sourceSearchButton">Rechercher dans le catalogue</button>
-  <div class="hint" id="sourceSearchStatus">Source active : Library of Congress — National Screening Room.</div>
+  <input class="field" id="sourceQuery" name="q" value="silent film" placeholder="Rechercher un film historique…" required>
+  <button class="btn secondary" id="sourceSearchButton">Rechercher à la Library of Congress</button>
+  <div class="hint" id="sourceSearchStatus">Envoi immédiat en mode privé après confirmation des droits.</div>
  </form>
  <div id="sourceResults" class="section"></div>
 </div>
@@ -144,13 +163,64 @@ async function importLocFilm(button){
  if(!confirm('Le film sera envoyé sur ta chaîne YouTube en mode privé. Confirmer ?'))return;
  button.disabled=true;button.textContent='Téléchargement et envoi en cours…';
  try{
-  const r=await fetch('/api/sources/loc/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itemUrl:button.dataset.sourceUrl,rightsConfirmed:true,publishAt:el('sourcePublishAt').value?localToIso(el('sourcePublishAt').value):''})});
+  const r=await fetch('/api/sources/loc/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itemUrl:button.dataset.sourceUrl,rightsConfirmed:true})});
   const d=await r.json();if(!r.ok)throw Error(d.error||'Import refusé.');
-  button.textContent=d.publishAt?'Programmé ✓':'Envoyé en privé ✓';
+  button.textContent='Envoyé en privé ✓';
   const link=document.createElement('a');link.href=d.url;link.target='_blank';link.rel='noopener';link.textContent='Ouvrir sur YouTube ↗';link.className='help-link';button.after(link);
   await loadUploads();
  }catch(err){button.disabled=false;button.textContent='Réessayer — '+err.message}
 }
+
+async function searchOpenMedia(q){
+ const status=el('openSourceSearchStatus'),box=el('openSourceResults'),button=el('openSourceSearchButton');
+ button.disabled=true;status.textContent='Recherche dans Internet Archive et Wikimedia Commons…';box.innerHTML='';
+ try{
+  const r=await fetch('/api/sources/open/search?q='+encodeURIComponent(q));const d=await r.json();
+  if(!r.ok)throw Error(d.error||'Recherche impossible.');
+  status.textContent=(d.notice||'Résultats chargés')+' · Internet Archive : '+d.providers.internetArchive+' · Wikimedia Commons : '+d.providers.wikimediaCommons;
+  box.innerHTML=(d.sources||[]).map((v,i)=>'<article class="card" style="margin-top:10px"><strong>'+escapeHtml(v.title)+'</strong><p class="hint">'+escapeHtml(v.provider)+' · '+escapeHtml(v.year||v.format)+' · '+(v.sizeBytes?Math.round(v.sizeBytes/1048576)+' Mo':'taille inconnue')+'</p><p class="hint">'+escapeHtml(v.description||'')+'</p><p class="hint">Licence : <strong>'+escapeHtml(v.license)+'</strong> · '+escapeHtml(v.attribution||'Attribution non indiquée')+'</p><a class="help-link" href="'+escapeHtml(v.itemUrl)+'" target="_blank" rel="noopener noreferrer">Consulter la fiche source ↗</a><label class="check"><input type="checkbox" id="openRights'+i+'"><span>J’ai vérifié la fiche, la licence et les droits tiers ; je peux redistribuer cette vidéo.</span></label><button class="btn" type="button" data-provider="'+escapeHtml(v.provider)+'" data-provider-key="'+escapeHtml(v.providerKey)+'" data-file-name="'+escapeHtml(v.fileName||'')+'" data-index="'+i+'">Télécharger et envoyer immédiatement vers YouTube</button></article>').join('')||'<p class="hint">Aucun fichier vidéo admissible trouvé. Essaie un autre titre ou thème.</p>';
+  box.querySelectorAll('[data-provider]').forEach(btn=>btn.addEventListener('click',()=>importOpenSource(btn)));
+ }catch(err){status.textContent=err.message}
+ finally{button.disabled=false}
+}
+async function importOpenSource(button){
+ const i=button.dataset.index,check=el('openRights'+i);
+ if(!check||!check.checked){el('openSourceSearchStatus').textContent='Vérifie la licence et coche la confirmation avant l’import.';return}
+ if(!confirm('Le fichier sera téléchargé puis envoyé immédiatement sur YouTube en mode privé. Continuer ?'))return;
+ button.disabled=true;button.textContent='Téléchargement puis envoi YouTube…';
+ try{
+  const r=await fetch('/api/sources/open/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:button.dataset.provider,providerKey:button.dataset.providerKey,fileName:button.dataset.fileName||null,rightsConfirmed:true})});
+  const d=await r.json();if(!r.ok)throw Error(d.error||'Import refusé.');
+  button.textContent='Envoyé en privé ✓';
+  const link=document.createElement('a');link.href=d.url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Ouvrir sur YouTube ↗';link.className='help-link';button.after(link);
+  await loadUploads();
+ }catch(err){button.disabled=false;button.textContent='Réessayer — '+err.message}
+}
+async function loadAutoSourceStatus(){
+ try{
+  const r=await fetch('/api/sources/auto/status');const d=await r.json();
+  if(!r.ok)throw Error(d.error||'Statut indisponible.');
+  el('autoSourceEnabled').checked=Boolean(d.enabled);
+  el('autoRightsConfirm').checked=Boolean(d.rights_policy_confirmed);
+  if(Array.isArray(d.queries)&&d.queries.length)el('autoSourceQueries').value=d.queries.join('\n');
+  const counts=d.counts||{};
+  const queue='File : '+(counts.pending||0)+' en attente · '+(counts.downloading||0)+' en cours · '+(counts['uploaded-private']||0)+' envoyée(s) · '+(counts.failed||0)+' échec(s)';
+  el('autoSourceStatus').textContent=(d.enabled?'Automatisation activée':'Automatisation arrêtée')+' · '+(d.youtubeReady?'YouTube autorisé':'Connexion YouTube persistante requise')+' · '+queue+(d.last_scan_at?' · Dernière recherche : '+new Date(d.last_scan_at).toLocaleString():'')+(d.last_error?' · Erreur : '+d.last_error:'')+'. Le traitement s’exécute toutes les 10 minutes lorsque le service Render est actif.';
+ }catch(err){el('autoSourceStatus').textContent=err.message}
+}
+async function saveAutoSourceSettings(){
+ const button=el('saveAutoSources'),status=el('autoSourceStatus');
+ button.disabled=true;status.textContent='Enregistrement…';
+ try{
+  const queries=el('autoSourceQueries').value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);
+  const r=await fetch('/api/sources/auto/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:el('autoSourceEnabled').checked,rightsPolicyConfirmed:el('autoRightsConfirm').checked,queries})});
+  const d=await r.json();if(!r.ok)throw Error(d.error||'Configuration impossible.');
+  status.textContent=d.enabled?'Automatisation activée. La recherche et la file démarrent automatiquement.':'Automatisation arrêtée.';
+  await loadAutoSourceStatus();
+ }catch(err){status.textContent=err.message}
+ finally{button.disabled=false}
+}
+
 async function refresh(){
  try{
   const [s,h]=await Promise.all([fetch('/api/status').then(r=>r.json()),fetch('/api/health').then(r=>r.json())]);
@@ -174,7 +244,9 @@ async function refresh(){
    else{el('oauthHint').textContent='Variables Google manquantes : '+(s.missingGoogleVariables||[]).join(', ');el('connectButton').classList.add('hidden')}
    el('configList').innerHTML='<p class="'+(s.adminConfigured?'good':'bad')+'">Mot de passe administrateur : '+(s.adminConfigured?'configuré':'manquant')+'</p><p class="'+(s.databaseConfigured?'good':'bad')+'">Base de données : '+(s.databaseConfigured?'configurée':'non configurée')+'</p><p class="'+(s.youtubeConfigured?'good':'bad')+'">Google OAuth : '+(s.youtubeConfigured?'configuré':'incomplet')+'</p><p>Variables Google manquantes : '+((s.missingGoogleVariables||[]).join(', ')||'aucune')+'</p>';
    await loadUploads();
+   await loadAutoSourceStatus();
    if (!el('sourceResults').dataset.loaded) searchFilmSources(el('sourceQuery').value);
+   if (!el('openSourceResults').dataset.loaded) searchOpenMedia(el('openSourceQuery').value);
   }
  }catch(e){el('serverStatus').textContent='Serveur indisponible'}
 }
@@ -194,6 +266,8 @@ async function loadUploads(){
 }
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 el('sourceSearchForm').addEventListener('submit',e=>{e.preventDefault();searchFilmSources(el('sourceQuery').value)});
+el('openSourceSearchForm').addEventListener('submit',e=>{e.preventDefault();searchOpenMedia(el('openSourceQuery').value)});
+el('saveAutoSources').addEventListener('click',saveAutoSourceSettings);
 el('loginForm').addEventListener('submit',async e=>{e.preventDefault();const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:new FormData(e.target).get('password')})});const d=await r.json();el('loginMessage').textContent=r.ok?'Connexion réussie.':d.error;await refresh()});
 el('uploadForm').addEventListener('submit',async e=>{
  e.preventDefault();
