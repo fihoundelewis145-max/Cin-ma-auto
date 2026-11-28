@@ -1,11 +1,16 @@
 {
   "name": "cinema-auto",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "description": "Studio de gestion et de programmation de vidéos autorisées vers YouTube",
   "main": "server.js",
-  "scripts": { "start": "node server.js", "dev": "node --watch server.js" },
-  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "connect-pg-simple": "^10.0.0",
     "dotenv": "^16.4.7",
