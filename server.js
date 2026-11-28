@@ -22,7 +22,7 @@ async function assertVideoAtLeastOneHour(filePath) {
     "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filePath
   ], { timeout: 120000, maxBuffer: 1024 * 1024 });
   const seconds = Number(String(stdout).trim());
-  if (!Number.isFinite(seconds) || seconds < 3600) {
+  if (!Number.isFinite(seconds) || seconds <= 3600) {
     throw new Error("Vidéo refusée : durée détectée " + (Number.isFinite(seconds) ? Math.floor(seconds / 60) + " minutes" : "inconnue") + ". CINEMA AUTO accepte uniquement les vidéos de plus de 1 heure.");
   }
   return seconds;
@@ -157,12 +157,13 @@ async function ensureSchema() {
     id SMALLINT PRIMARY KEY CHECK (id = 1),
     enabled BOOLEAN NOT NULL DEFAULT FALSE,
     rights_policy_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
-    queries TEXT[] NOT NULL DEFAULT ARRAY['silent film','public domain short film'],
+    queries TEXT[] NOT NULL DEFAULT ARRAY['feature film','feature-length movie','public domain television episode','classic television episode'],
     last_scan_at TIMESTAMPTZ,
     last_error TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
   await pool.query("INSERT INTO source_auto_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING");
+  await pool.query("UPDATE source_auto_config SET queries=ARRAY['feature film','feature-length movie','public domain television episode','classic television episode'] WHERE id=1 AND queries=ARRAY['silent film','public domain short film']");
   await pool.query(`CREATE TABLE IF NOT EXISTS source_jobs (
     id BIGSERIAL PRIMARY KEY,
     source_key TEXT UNIQUE NOT NULL,
