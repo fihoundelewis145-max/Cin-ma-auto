@@ -38,7 +38,7 @@ Node.js 20+, `npm install`, variables dans `.env`, puis `npm start`.
 ## Limitations à connaître
 - L'envoi vidéo utilise un fichier temporaire local Render : il ne constitue pas un stockage durable. Les grands fichiers nécessitent un disque persistant ou un stockage objet (S3/R2).
 - Les sessions et jetons OAuth sont désormais stockés dans PostgreSQL si `DATABASE_URL` est reliée.
-- Les sources Internet Archive et Wikimedia Commons affichées par le moteur automatique doivent présenter une licence explicite admise (domaine public, CC0, CC BY ou CC BY-SA). Les métadonnées ne remplacent pas la vérification des droits tiers.
+- Les sources Internet Archive et Wikimedia Commons affichées par le moteur automatique doivent présenter une licence explicite admise (domaine public ou CC0 pour l'automatisation ; CC BY et CC BY-SA restent en import manuel). Les métadonnées ne remplacent pas la vérification des droits tiers.
 - La recherche automatique tourne dans le processus du service web. Sur le forfait gratuit Render, le service s'endort après 15 minutes sans trafic entrant ; une surveillance continue nécessite un service toujours actif ou un Cron payant.
 - Les vidéos de la file automatique sont téléversées immédiatement avec visibilité privée. Aucune publication à une heure future n'est programmée par ce flux.
 
