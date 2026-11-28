@@ -370,7 +370,7 @@ app.post("/api/sources/loc/import", requireAdmin, async (req, res) => {
     const itemPathParts = itemUrl.pathname.split("/").filter(Boolean);
     if (itemUrl.protocol !== "https:" || itemUrl.hostname !== "www.loc.gov" || itemPathParts.length !== 2 || itemPathParts[0] !== "item" || !/^[A-Za-z0-9._-]+$/.test(itemPathParts[1]))
       return res.status(400).json({ error: "Référence Library of Congress invalide." });
-    const tokens = req.session.youtubeTokens;
+    const tokens = await loadPersistentYoutubeTokens();
     if (!tokens) return res.status(401).json({ error: "Connectez d'abord votre chaîne YouTube à CINEMA AUTO." });
     const metaUrl = new URL(itemUrl.pathname, "https://www.loc.gov");
     metaUrl.searchParams.set("fo", "json");
