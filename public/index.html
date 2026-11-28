@@ -71,13 +71,20 @@ form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1
 
 <div class="integration-divider"></div>
 <div class="integration">
-  <div class="integration-head"><span class="integration-icon" style="background:#14251d;color:#67dba3">M</span><div><strong>Metricool — relais de publication</strong><small>Programmation YouTube depuis CINEMA AUTO</small></div></div>
-  <p class="muted">CINEMA AUTO transmettra les vidéos à votre calendrier Metricool. Metricool effectuera ensuite la publication sur la chaîne YouTube reliée à la marque.</p>
-  <p class="hint" id="metricoolStatus">État Metricool : vérification…</p>
-  <button class="btn secondary" type="button" id="testMetricool">Tester la connexion API</button>
+  <div class="integration-head"><span class="integration-icon" style="background:#14251d;color:#67dba3">M</span><div><strong>Metricool — connexion YouTube</strong><small>Parcours rapide depuis CINEMA AUTO</small></div></div>
+  <p class="muted">Reliez votre chaîne YouTube à la marque Metricool utilisée par CINEMA AUTO en deux étapes.</p>
+  <ol class="vidiq-steps">
+    <li>Cliquez sur <strong>Ouvrir la connexion</strong>. Dans Metricool, choisissez « Connecter une chaîne YouTube ».</li>
+    <li>Sélectionnez le compte Google propriétaire de la chaîne, acceptez les autorisations et choisissez la bonne chaîne.</li>
+    <li>Revenez ici et appuyez sur <strong>Vérifier la connexion</strong>.</li>
+  </ol>
+  <a class="btn" id="connectMetricool" href="https://app.metricool.com/brands/connections?blogId=8413347" target="_blank" rel="noopener noreferrer">1. Ouvrir la connexion YouTube ↗</a>
+  <button class="btn secondary" type="button" id="verifyMetricoolChannel">2. Vérifier la connexion</button>
+  <p class="hint" id="metricoolChannelResult" aria-live="polite">Chaîne YouTube : vérification non effectuée.</p>
+  <p class="hint" id="metricoolStatus">État de l'API Metricool : vérification…</p>
+  <button class="btn secondary" type="button" id="testMetricool">Tester l'accès API</button>
   <p class="hint" id="metricoolTestResult"></p>
-  <a class="btn secondary" id="connectMetricool" href="https://app.metricool.com/brands/connections?blogId=8413347" target="_blank" rel="noopener noreferrer">Relier YouTube à la marque Metricool ↗</a>
-  <p class="hint">Pour activer l'envoi depuis ce site, le compte Metricool doit disposer d'un forfait Advanced ou Custom et d'un accès API. Récupérez le jeton dans Paramètres du compte → API, puis ajoutez METRICOOL_API_TOKEN et METRICOOL_USER_ID dans Render → Environment. L'identifiant de marque Metricool (8413347) est déjà prérempli. Le userId se lit dans l'URL de votre marque. Le jeton reste secret et ne doit pas être envoyé dans le chat.</p>
+  <p class="hint">La vérification automatique et la programmation depuis CINEMA AUTO nécessitent les identifiants API Metricool (forfait Advanced ou Custom). Ils se configurent dans Render → Environment avec METRICOOL_API_TOKEN et METRICOOL_USER_ID. Ne partagez jamais le jeton dans le chat.</p>
   <a class="help-link" href="https://help.metricool.com/fr/guide-de-base-pour-lintegration-api-r97af" target="_blank" rel="noopener noreferrer">Guide officiel de l'API Metricool</a>
 </div>
 <div class="notice">Important : CINEMA AUTO et vidIQ demandent deux autorisations distinctes. Les vidéos téléversées par CINEMA AUTO doivent être des contenus que vous êtes autorisé à redistribuer.</div>
@@ -89,6 +96,24 @@ form{display:grid;gap:12px}.hint{font-size:12px;color:var(--muted);line-height:1
 <script>
 const el=id=>document.getElementById(id);
 function localToIso(value){if(!value)return "";const d=new Date(value);if(!Number.isFinite(d.getTime()))throw Error("Date de programmation invalide.");if(d.getTime()<Date.now()+120000)throw Error("Choisissez une heure située au moins deux minutes dans le futur.");return d.toISOString()}
+async function verifyMetricoolChannel(silent=false){
+ const button=el('verifyMetricoolChannel'),result=el('metricoolChannelResult');
+ if(button)button.disabled=true;
+ if(result&&!silent)result.textContent='Vérification de la chaîne YouTube dans la marque Metricool…';
+ try{
+  const r=await fetch('/api/metricool/connection');const d=await r.json();
+  if(!r.ok)throw Error(d.error+(d.missing?' — '+d.missing.join(', '):''));
+  if(d.connected){
+   result.textContent='✓ YouTube est connecté à Metricool'+(d.channelName?' : '+d.channelName:'')+'. CINEMA AUTO peut utiliser cette destination.';
+   result.className='hint good';
+  }else{
+   result.textContent='YouTube n’est pas encore connecté à cette marque Metricool. Ouvrez la connexion ci-dessus, sélectionnez votre chaîne, puis réessayez.';
+   result.className='hint bad';
+  }
+ }catch(err){
+  if(!silent){result.textContent=err.message;result.className='hint bad'}
+ }finally{if(button)button.disabled=false}
+}
 async function refresh(){
  try{
   const [s,h]=await Promise.all([fetch('/api/status').then(r=>r.json()),fetch('/api/health').then(r=>r.json())]);
@@ -98,9 +123,11 @@ async function refresh(){
    try {
     const ms = await fetch('/api/metricool/status').then(r=>r.json());
     el('metricoolStatus').textContent = ms.configured
-      ? 'API Metricool configurée. Le relais de publication est prêt.'
-      : 'Configuration incomplète : ' + (ms.missing || []).join(', ');
+      ? 'API Metricool configurée. Vérification de la chaîne disponible.'
+      : 'API non configurée : ' + (ms.missing || []).join(', ') + '. La liaison YouTube s’effectue dans la fenêtre Metricool.';
     el('metricoolStatus').className = 'hint ' + (ms.configured ? 'good' : 'bad');
+    if (ms.configured) await verifyMetricoolChannel(true);
+    else el('metricoolChannelResult').textContent = 'Après la liaison, configurez les identifiants API pour vérifier ici que YouTube est bien connecté.';
    } catch (_) {
     el('metricoolStatus').textContent = 'État Metricool indisponible.';
    }
@@ -148,7 +175,8 @@ el('uploadForm').addEventListener('submit',async e=>{
   e.target.reset();await loadUploads();
  }catch(err){m.textContent=err.message}
  finally{b.disabled=false}
-});el('testMetricool').addEventListener('click',async()=>{
+});el('verifyMetricoolChannel').addEventListener('click',()=>verifyMetricoolChannel(false));
+el('testMetricool').addEventListener('click',async()=>{
  const button=el('testMetricool'),result=el('metricoolTestResult');
  button.disabled=true;result.textContent='Vérification de la connexion API…';
  try{
